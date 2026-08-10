@@ -1,0 +1,33 @@
+import type { InvoiceOutputData, InvoiceOutputItem } from "@/lib/invoice-text"
+
+export type PaymentMethod = "BANK_TRANSFER" | "COD"
+export type ShippingMethod = "FREE" | "DELIVERY_APP" | "COURIER"
+export const WAREHOUSE_OPTIONS = ["L7-21", "L7-22"] as const
+export type Warehouse = (typeof WAREHOUSE_OPTIONS)[number]
+
+export interface ProductVariant {
+  id: string
+  externalId: string
+  name: string
+  volume: string
+  concentration: string
+  price: number
+  isActive: boolean
+}
+
+export interface InvoiceRecord extends InvoiceOutputData {
+  id: string
+  invoiceNumber: string
+  status: "CONFIRMED" | "CANCELLED"
+  createdAt: string
+  updatedAt?: string
+  items: InvoiceOutputItem[]
+}
+
+export interface InvoiceFormItem {
+  productId: string
+  name: string
+  volume: string
+  concentration: string
+  quantity: number
+}

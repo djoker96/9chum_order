@@ -1,0 +1,192 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  COD
+}
+
+enum ShippingMethod {
+  FREE
+  DELIVERY_APP
+  COURIER
+}
+
+enum InvoiceStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+enum SyncSource {
+  GOOGLE_SHEETS
+  EXCEL
+}
+
+enum SyncStatus {
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String?
+  role         UserRole @default(STAFF)
+  isActive     Boolean  @default(true) @map("is_active")
+
+  sessions Session[]
+  invoices Invoice[]
+  syncLogs ProductSyncLog[]
+  googleSheetConfigs GoogleSheetConfig[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([role])
+  @@index([isActive])
+  @@map("users")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique @map("token_hash")
+  userId     String   @map("user_id")
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Product {
+  id            String    @id @default(cuid())
+  externalId    String    @unique @map("external_id")
+  name          String
+  concentration String
+  volume        String
+  price         Decimal   @db.Decimal(14, 0)
+  isActive      Boolean   @default(true) @map("is_active")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+
+  invoiceItems InvoiceItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@index([isActive])
+  @@index([name, volume, concentration])
+  @@map("products")
+}
+
+model Invoice {
+  id             String         @id @default(cuid())
+  invoiceNumber  String         @unique @map("invoice_number")
+  customerName   String         @map("customer_name")
+  phone          String
+  address        String
+  warehouse      String?
+  paymentMethod  PaymentMethod  @map("payment_method")
+  shippingMethod ShippingMethod @map("shipping_method")
+  shippingFee    Decimal        @default(0) @map("shipping_fee") @db.Decimal(14, 0)
+  subtotal       Decimal        @db.Decimal(14, 0)
+  total          Decimal        @db.Decimal(14, 0)
+  note           String?
+  issueInvoice   Boolean        @default(false) @map("issue_invoice")
+  companyName    String?        @map("company_name")
+  invoiceAddress String?        @map("invoice_address")
+  invoiceEmail   String?        @map("invoice_email")
+  status         InvoiceStatus  @default(CONFIRMED)
+  createdById    String         @map("created_by_id")
+  createdBy      User           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  items          InvoiceItem[]
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  @@index([customerName])
+  @@index([phone])
+  @@index([createdAt])
+  @@index([createdById])
+  @@index([status])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id            String   @id @default(cuid())
+  invoiceId     String   @map("invoice_id")
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId     String?  @map("product_id")
+  product       Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName   String   @map("product_name")
+  volume        String
+  concentration String
+  unitPrice     Decimal  @map("unit_price") @db.Decimal(14, 0)
+  quantity      Int
+  lineTotal     Decimal  @map("line_total") @db.Decimal(14, 0)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([invoiceId])
+  @@index([productId])
+  @@map("invoice_items")
+}
+
+model ProductSyncLog {
+  id             String     @id @default(cuid())
+  source         SyncSource
+  status         SyncStatus
+  createdCount   Int        @default(0) @map("created_count")
+  updatedCount   Int        @default(0) @map("updated_count")
+  unchangedCount Int        @default(0) @map("unchanged_count")
+  skippedCount   Int        @default(0) @map("skipped_count")
+  errorCount     Int        @default(0) @map("error_count")
+  errorMessage   String?    @map("error_message")
+  detailJson     Json?      @map("detail_json")
+  startedAt      DateTime   @default(now()) @map("started_at")
+  completedAt    DateTime?  @map("completed_at")
+  createdById    String     @map("created_by_id")
+  createdBy      User       @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([source])
+  @@index([status])
+  @@index([startedAt])
+  @@index([createdById])
+  @@map("product_sync_logs")
+}
+
+model GoogleSheetConfig {
+  id           String   @id @default("default")
+  spreadsheetId String  @map("spreadsheet_id")
+  sheetName    String   @map("sheet_name")
+  updatedById  String   @map("updated_by_id")
+  updatedBy    User     @relation(fields: [updatedById], references: [id], onDelete: Restrict)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([updatedById])
+  @@map("google_sheet_configs")
+}
+
+model InvoiceNumberSequence {
+  dateKey   String   @id @map("date_key")
+  lastValue Int      @default(0) @map("last_value")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("invoice_number_sequences")
+}
