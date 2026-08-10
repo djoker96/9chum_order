@@ -1,0 +1,123 @@
+name: donhang-9chum
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  db:
+    # Database upgrades are a separate maintenance operation. Ordinary app
+    # releases never pull or change this digest.
+    image: postgres:16.14-bookworm@sha256:64154d0babcb1741988719e703419af0382b19953706149f9872fbd0f438efa8
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:?POSTGRES_ADMIN_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD is required}
+      APP_DB_NAME: ${POSTGRES_DB:?POSTGRES_DB is required}
+      APP_DB_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      APP_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      MIGRATOR_DB_USER: ${POSTGRES_MIGRATOR_USER:?POSTGRES_MIGRATOR_USER is required}
+      MIGRATOR_DB_PASSWORD: ${POSTGRES_MIGRATOR_PASSWORD:?POSTGRES_MIGRATOR_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ${POSTGRES_INIT_SCRIPT:-./deploy/postgres/init-app.sh}:/docker-entrypoint-initdb.d/10-create-app.sh:ro
+    networks:
+      - database
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 30s
+    logging: *default-logging
+
+  app:
+    image: ${APP_IMAGE:?APP_IMAGE is required}
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      AUTH_SESSION_TTL_DAYS: ${AUTH_SESSION_TTL_DAYS:-7}
+      AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-donhang_session}
+      APP_ORIGIN: ${APP_ORIGIN:-https://donhang.9chum.vn}
+      GOOGLE_PROJECT_ID: ${GOOGLE_PROJECT_ID:-}
+      GOOGLE_CLIENT_EMAIL: ${GOOGLE_CLIENT_EMAIL:-}
+      GOOGLE_PRIVATE_KEY: ${GOOGLE_PRIVATE_KEY:-}
+      GOOGLE_SHEET_ID: ${GOOGLE_SHEET_ID:-}
+      GOOGLE_SHEET_NAME: ${GOOGLE_SHEET_NAME:-Products}
+    ports:
+      - '127.0.0.1:${APP_PORT:-3101}:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - database
+      - outbound
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /app/.next/cache:rw,noexec,nosuid,size=64m,uid=1000,gid=1000
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    stop_grace_period: 30s
+    logging: *default-logging
+
+  ops:
+    image: ${OPS_IMAGE:?OPS_IMAGE is required}
+    profiles: ["ops"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:?MIGRATION_DATABASE_URL is required}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - database
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
+
+volumes:
+  postgres-data:
+    name: ${POSTGRES_VOLUME_NAME:-donhang-9chum-postgres-data}
+
+networks:
+  database:
+    name: ${DATABASE_NETWORK_NAME:-donhang-9chum-database}
+    internal: true
+  outbound:
+    name: ${OUTBOUND_NETWORK_NAME:-donhang-9chum-outbound}

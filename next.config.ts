@@ -5,6 +5,7 @@ const scriptSources = process.env.NODE_ENV === "development"
   : "'self' 'unsafe-inline'"
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,
   async headers() {

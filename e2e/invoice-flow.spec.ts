@@ -19,7 +19,8 @@ test.describe("invoice critical flow", () => {
   })
 
   test("creates an invoice with a dependent product variant and free shipping", async ({ page }) => {
-    await page.getByLabel("Tên khách hàng").fill("E2E Customer")
+    const customerName = `E2E Customer ${Date.now()}`
+    await page.getByLabel("Tên khách hàng").fill(customerName)
     await page.getByLabel("Số điện thoại").fill("0900000002")
     await page.getByLabel("Địa chỉ giao hàng").fill("Hà Nội")
     const orderSections = page.locator("fieldset")
@@ -44,6 +45,11 @@ test.describe("invoice critical flow", () => {
     await expect(page.getByText("Đã lưu")).toBeVisible()
     await expect(page.getByTestId("invoice-preview")).toContainText("360.000đ")
     await expect(page.getByTestId("invoice-preview")).toContainText("Xuất kho")
+
+    await page.goto("/invoices")
+    const createdInvoiceRow = page.getByRole("row").filter({ hasText: customerName })
+    await expect(createdInvoiceRow).toContainText("360.000đ")
+    await expect(createdInvoiceRow).toContainText("Đã xác nhận")
   })
 
   test("hides the shipping fee row when paid shipping has no fee", async ({ page }) => {

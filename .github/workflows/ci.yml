@@ -1,0 +1,392 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality and PostgreSQL integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/donhang_ci?schema=public
+    services:
+      postgres:
+        image: postgres:16.14-bookworm@sha256:64154d0babcb1741988719e703419af0382b19953706149f9872fbd0f438efa8
+        env:
+          POSTGRES_DB: donhang_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d donhang_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Apply PostgreSQL migrations
+        run: npm run db:deploy
+
+      - name: Run PostgreSQL integration tests
+        run: npm run test:integration
+
+      - name: Run unit tests with 80% coverage gate
+        run: npm run test:coverage
+
+      - name: Build production application with Webpack
+        run: npm run build -- --webpack
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  production-image-e2e:
+    name: Production image E2E and image scan
+    needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      APP_IMAGE: donhang-9chum-ci:app-${{ github.sha }}
+      OPS_IMAGE: donhang-9chum-ci:ops-${{ github.sha }}
+      CI_PROJECT: donhang-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      CI_RUNTIME_ENV: /tmp/donhang-ci-${{ github.run_id }}-${{ github.run_attempt }}.runtime.env
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3101
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build production app and ops images
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --pull --target app --build-arg "VCS_REF=${GITHUB_SHA}" --tag "${APP_IMAGE}" .
+          docker build --pull --target ops --build-arg "VCS_REF=${GITHUB_SHA}" --tag "${OPS_IMAGE}" .
+
+      - name: Scan app image for fixable high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.APP_IMAGE }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          scanners: vuln
+
+      - name: Scan ops image for fixable high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.OPS_IMAGE }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          scanners: vuln
+
+      - name: Create ephemeral test credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          database_admin_password="$(openssl rand -hex 32)"
+          database_migrator_password="$(openssl rand -hex 32)"
+          database_app_password="$(openssl rand -hex 32)"
+          admin_password="$(openssl rand -hex 32)"
+          echo "::add-mask::${database_admin_password}"
+          echo "::add-mask::${database_migrator_password}"
+          echo "::add-mask::${database_app_password}"
+          echo "::add-mask::${admin_password}"
+          printf 'CI_APP_DB_PASSWORD=%s\n' "${database_app_password}" >> "${GITHUB_ENV}"
+          printf 'E2E_ADMIN_EMAIL=%s\n' 'e2e-admin@example.test' >> "${GITHUB_ENV}"
+          printf 'E2E_ADMIN_PASSWORD=%s\n' "${admin_password}" >> "${GITHUB_ENV}"
+
+          umask 077
+          {
+            printf 'POSTGRES_DB=donhang_ci\n'
+            printf 'POSTGRES_USER=donhang_app\n'
+            printf 'POSTGRES_PASSWORD=%s\n' "${database_app_password}"
+            printf 'POSTGRES_ADMIN_USER=donhang_admin\n'
+            printf 'POSTGRES_ADMIN_PASSWORD=%s\n' "${database_admin_password}"
+            printf 'POSTGRES_MIGRATOR_USER=donhang_migrator\n'
+            printf 'POSTGRES_MIGRATOR_PASSWORD=%s\n' "${database_migrator_password}"
+            printf 'DATABASE_URL=postgresql://donhang_app:%s@db:5432/donhang_ci?schema=public\n' "${database_app_password}"
+            printf 'MIGRATION_DATABASE_URL=postgresql://donhang_migrator:%s@db:5432/donhang_ci?schema=public\n' "${database_migrator_password}"
+            printf 'POSTGRES_INIT_SCRIPT=%s/deploy/postgres/init-app.sh\n' "${GITHUB_WORKSPACE}"
+            printf 'APP_PORT=3101\n'
+            printf 'AUTH_SESSION_TTL_DAYS=7\n'
+            printf 'AUTH_COOKIE_NAME=donhang_ci_session\n'
+            printf 'APP_ORIGIN=http://127.0.0.1:3101\n'
+            printf 'POSTGRES_VOLUME_NAME=%s-postgres-data\n' "${CI_PROJECT}"
+            printf 'DATABASE_NETWORK_NAME=%s-database\n' "${CI_PROJECT}"
+            printf 'OUTBOUND_NETWORK_NAME=%s-outbound\n' "${CI_PROJECT}"
+          } > "${CI_RUNTIME_ENV}"
+
+      - name: Cold-start digest-pinned PostgreSQL through production Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose \
+            --project-name "${CI_PROJECT}" \
+            --env-file "${CI_RUNTIME_ENV}" \
+            --file compose.production.yml \
+            up --detach --wait --wait-timeout 120 db
+
+      - name: Verify production database role boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          roles="$(docker compose \
+            --project-name "${CI_PROJECT}" \
+            --env-file "${CI_RUNTIME_ENV}" \
+            --file compose.production.yml \
+            exec -T db psql --username donhang_admin --dbname postgres \
+              --tuples-only --no-align \
+              --command "SELECT rolname || ':' || rolsuper || ':' || rolcreatedb || ':' || rolcreaterole FROM pg_roles WHERE rolname IN ('donhang_app','donhang_migrator') ORDER BY rolname")"
+          test "${roles}" = $'donhang_app:false:false:false\ndonhang_migrator:false:false:false'
+
+      - name: Migrate temporary database with the ops image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose \
+            --project-name "${CI_PROJECT}" \
+            --env-file "${CI_RUNTIME_ENV}" \
+            --file compose.production.yml \
+            --profile ops run --rm --no-deps ops \
+            ./node_modules/.bin/prisma migrate deploy
+
+          if docker compose \
+            --project-name "${CI_PROJECT}" \
+            --env-file "${CI_RUNTIME_ENV}" \
+            --file compose.production.yml \
+            exec -T --env "PGPASSWORD=${CI_APP_DB_PASSWORD}" db \
+              psql --host 127.0.0.1 --username donhang_app --dbname donhang_ci \
+                --set ON_ERROR_STOP=1 --command 'CREATE TABLE forbidden_runtime_ddl(id integer);'; then
+            echo 'Runtime database role unexpectedly has DDL privileges.' >&2
+            exit 1
+          fi
+
+      - name: Seed temporary admin with the ops image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose \
+            --project-name "${CI_PROJECT}" \
+            --env-file "${CI_RUNTIME_ENV}" \
+            --file compose.production.yml \
+            --profile ops run --rm --no-deps \
+            --env ADMIN_EMAIL="${E2E_ADMIN_EMAIL}" \
+            --env ADMIN_PASSWORD="${E2E_ADMIN_PASSWORD}" \
+            ops \
+            ./node_modules/.bin/tsx prisma/seed.ts
+
+      - name: Insert deterministic E2E product fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose \
+            --project-name "${CI_PROJECT}" \
+            --env-file "${CI_RUNTIME_ENV}" \
+            --file compose.production.yml \
+            exec -T db \
+              psql --username donhang_migrator --dbname donhang_ci --set ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "products" (
+            "id",
+            "external_id",
+            "name",
+            "concentration",
+            "volume",
+            "price",
+            "updated_at"
+          ) VALUES (
+            'ci-product-a-30ml-10pct',
+            'ci-product-a-30ml-10pct',
+            'Sản phẩm A',
+            '10%',
+            '30ml',
+            180000,
+            CURRENT_TIMESTAMP
+          ) ON CONFLICT ("external_id") DO UPDATE SET
+            "name" = EXCLUDED."name",
+            "concentration" = EXCLUDED."concentration",
+            "volume" = EXCLUDED."volume",
+            "price" = EXCLUDED."price",
+            "is_active" = true,
+            "updated_at" = CURRENT_TIMESTAMP;
+          SQL
+
+      - name: Start production app image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose \
+            --project-name "${CI_PROJECT}" \
+            --env-file "${CI_RUNTIME_ENV}" \
+            --file compose.production.yml \
+            up --detach --wait --wait-timeout 180 app
+
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent --output /dev/null "${PLAYWRIGHT_BASE_URL}/api/health"; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ "${ready:-false}" != "true" ]]; then
+            docker compose --project-name "${CI_PROJECT}" --env-file "${CI_RUNTIME_ENV}" --file compose.production.yml logs app
+            exit 1
+          fi
+
+          app_container="$(docker compose --project-name "${CI_PROJECT}" --env-file "${CI_RUNTIME_ENV}" --file compose.production.yml ps --quiet app)"
+          for attempt in $(seq 1 60); do
+            health="$(docker inspect \
+              --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
+              "${app_container}")"
+            case "${health}" in
+              healthy)
+                exit 0
+                ;;
+              missing|unhealthy)
+                docker logs "${app_container}"
+                echo "Production app Docker health status: ${health}" >&2
+                exit 1
+                ;;
+            esac
+            sleep 2
+          done
+
+          docker logs "${app_container}"
+          echo "Production app Docker healthcheck did not become healthy." >&2
+          exit 1
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright against the external production server
+        run: npm run test:e2e
+
+      - name: Verify database outage, recovery, and restart persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          invoice_count_before="$(docker compose --project-name "${CI_PROJECT}" --env-file "${CI_RUNTIME_ENV}" --file compose.production.yml exec -T db psql --username donhang_app --dbname donhang_ci --tuples-only --no-align --command 'SELECT COUNT(*) FROM invoices')"
+          test "${invoice_count_before}" -gt 0
+
+          docker compose --project-name "${CI_PROJECT}" --env-file "${CI_RUNTIME_ENV}" --file compose.production.yml restart app
+          app_ready=false
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --output /dev/null "${PLAYWRIGHT_BASE_URL}/api/health"; then
+              app_ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "${app_ready}" = true
+          invoice_count_after="$(docker compose --project-name "${CI_PROJECT}" --env-file "${CI_RUNTIME_ENV}" --file compose.production.yml exec -T db psql --username donhang_app --dbname donhang_ci --tuples-only --no-align --command 'SELECT COUNT(*) FROM invoices')"
+          test "${invoice_count_after}" = "${invoice_count_before}"
+
+          docker compose --project-name "${CI_PROJECT}" --env-file "${CI_RUNTIME_ENV}" --file compose.production.yml stop db
+          health_down_status=''
+          for attempt in $(seq 1 10); do
+            health_down_status="$(curl --silent --output "${RUNNER_TEMP}/health-down.json" --write-out '%{http_code}' "${PLAYWRIGHT_BASE_URL}/api/health")"
+            [[ "${health_down_status}" == 503 ]] && break
+            sleep 1
+          done
+          test "${health_down_status}" = 503
+          grep --quiet 'Dịch vụ chưa sẵn sàng' "${RUNNER_TEMP}/health-down.json"
+          if grep --extended-regexp --ignore-case --quiet 'postgres|database_url|db:5432' "${RUNNER_TEMP}/health-down.json"; then
+            echo 'Health failure leaked database details.' >&2
+            exit 1
+          fi
+          docker compose --project-name "${CI_PROJECT}" --env-file "${CI_RUNTIME_ENV}" --file compose.production.yml up --detach --wait --wait-timeout 120 db
+          database_recovered=false
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --output /dev/null "${PLAYWRIGHT_BASE_URL}/api/health"; then
+              database_recovered=true
+              break
+            fi
+            sleep 2
+          done
+          test "${database_recovered}" = true
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Show container logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          docker compose --project-name "${CI_PROJECT}" --env-file "${CI_RUNTIME_ENV}" --file compose.production.yml logs 2>/dev/null || true
+
+      - name: Remove temporary containers and network
+        if: always()
+        shell: bash
+        run: |
+          docker compose --project-name "${CI_PROJECT}" --env-file "${CI_RUNTIME_ENV}" --file compose.production.yml --profile ops down --volumes --remove-orphans 2>/dev/null || true
+          rm -f -- "${CI_RUNTIME_ENV}" "${RUNNER_TEMP}/health-down.json"

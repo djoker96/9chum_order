@@ -9,7 +9,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: [path.resolve(__dirname, "test/setup.ts")],
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "test/deployment/**/*.test.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
@@ -17,6 +17,8 @@ export default defineConfig({
         "src/lib/invoice-number.ts",
         "src/lib/invoice-text.ts",
         "src/lib/money.ts",
+        "src/app/api/health/route.ts",
+        "src/app/api/health/readiness.ts",
         "src/server/auth/login.schema.ts",
         "src/server/auth/permissions.ts",
         "src/server/auth/rate-limit.ts",

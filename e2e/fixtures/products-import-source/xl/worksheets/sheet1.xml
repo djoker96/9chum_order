@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <dimension ref="A1:F2"/>
+  <sheetData>
+    <row r="1">
+      <c r="A1" t="inlineStr"><is><t>id</t></is></c>
+      <c r="B1" t="inlineStr"><is><t>product_name</t></is></c>
+      <c r="C1" t="inlineStr"><is><t>concentration</t></is></c>
+      <c r="D1" t="inlineStr"><is><t>volume</t></is></c>
+      <c r="E1" t="inlineStr"><is><t>price</t></is></c>
+      <c r="F1" t="inlineStr"><is><t>active</t></is></c>
+    </row>
+    <row r="2">
+      <c r="A2" t="inlineStr"><is><t>E2E-XLSX-001</t></is></c>
+      <c r="B2" t="inlineStr"><is><t>Sản phẩm Excel E2E</t></is></c>
+      <c r="C2" t="inlineStr"><is><t>15%</t></is></c>
+      <c r="D2" t="inlineStr"><is><t>20ml</t></is></c>
+      <c r="E2"><v>215000</v></c>
+      <c r="F2" t="inlineStr"><is><t>true</t></is></c>
+    </row>
+  </sheetData>
+</worksheet>

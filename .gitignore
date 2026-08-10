@@ -10,4 +10,10 @@ test-results/
 .env.local
 .env.*.local
 !.env.example
+runtime.env
+*.runtime.env
+deploy-state/
+backups/
+*.known_hosts
+id_ed25519*
 src/generated/

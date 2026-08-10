@@ -1,0 +1,10 @@
+[Unit]
+Description=Run donhang-9chum backup daily at 02:00 Asia/Ho_Chi_Minh
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 Asia/Ho_Chi_Minh
+Persistent=true
+Unit=donhang-backup.service
+
+[Install]
+WantedBy=timers.target

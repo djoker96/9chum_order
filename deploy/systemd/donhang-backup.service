@@ -1,0 +1,19 @@
+[Unit]
+Description=Daily PostgreSQL backup for donhang-9chum
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/donhang-backup daily
+TimeoutStartSec=1h
+UMask=0077
+User=root
+Group=root
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

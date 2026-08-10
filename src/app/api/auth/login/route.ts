@@ -5,12 +5,12 @@ import { loginSchema } from "@/server/auth/login.schema"
 import { allowLoginAttempt } from "@/server/auth/rate-limit"
 import { verifyPassword } from "@/server/auth/password"
 import { createSession } from "@/server/auth/session"
-import { assertSameOrigin } from "@/server/http/security"
+import { assertSameOrigin, getClientIp } from "@/server/http/security"
 
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request)
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
+    const ip = getClientIp(request)
     if (!allowLoginAttempt(ip)) {
       throw new AppError(429, "RATE_LIMITED", "Bạn thử đăng nhập quá nhiều lần. Vui lòng thử lại sau.")
     }

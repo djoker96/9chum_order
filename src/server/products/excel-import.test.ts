@@ -1,13 +1,37 @@
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { describe, expect, it } from "vitest"
 import {
   MAX_EXCEL_COLUMNS,
   MAX_EXCEL_ROWS,
+  parseExcelRows,
   validateExcelBuffer,
   validateExcelRows,
   validateExcelUpload,
 } from "@/server/products/excel-import"
 
 describe("validateExcelUpload", () => {
+  it("parses the production E2E workbook fixture", async () => {
+    const fixture = readFileSync(
+      path.resolve(process.cwd(), "e2e/fixtures/products-import.xlsx"),
+    )
+    const buffer = fixture.buffer.slice(
+      fixture.byteOffset,
+      fixture.byteOffset + fixture.byteLength,
+    ) as ArrayBuffer
+
+    await expect(parseExcelRows(buffer)).resolves.toEqual([
+      {
+        id: "E2E-XLSX-001",
+        product_name: "Sản phẩm Excel E2E",
+        concentration: "15%",
+        volume: "20ml",
+        price: 215000,
+        active: "true",
+      },
+    ])
+  })
+
   it("accepts a small xlsx upload", () => {
     const file = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], "products.xlsx", {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
