@@ -34,7 +34,8 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     HOSTNAME=0.0.0.0 \
     PORT=3000
-RUN mkdir -p /app/.next/cache \
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+    && mkdir -p /app/.next/cache \
     && chown -R node:node /app
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
@@ -52,6 +53,7 @@ LABEL org.opencontainers.image.source="https://github.com/djoker96/9chum_order" 
       org.opencontainers.image.revision="${VCS_REF}"
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node package.json package-lock.json prisma.config.ts ./
 COPY --chown=node:node prisma ./prisma
