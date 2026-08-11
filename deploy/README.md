@@ -101,6 +101,7 @@ ss -lntp
 - HTTP trả redirect HTTPS;
 - certificate đúng hostname/chain/thời hạn;
 - Internet không truy cập được `$APP_PORT` hay `5432`;
+- nếu host dùng CSF với outbound policy `DROP`, release tự thêm rule root-owned chỉ cho phép Docker proxy tới subnet app ở TCP `3000` (không mở `$APP_PORT` ra Internet);
 - `Host` lạ không vào vhost;
 - same-origin thật thành công, `Origin: https://attacker.example` trả 403;
 - gửi nhiều login request với `X-Forwarded-For` giả khác nhau vẫn bị 429 theo IP thực, chứng minh proxy không cho bypass rate limit;

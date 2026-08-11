@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process"
-import { existsSync, statSync } from "node:fs"
+import { existsSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 
@@ -243,5 +243,15 @@ describe("production Compose isolation", () => {
     )
     expect(app.environment).not.toHaveProperty("POSTGRES_ADMIN_PASSWORD")
     expect(app.environment).not.toHaveProperty("MIGRATION_DATABASE_URL")
+  })
+})
+
+describe("host firewall integration", () => {
+  it("allows the CSF-protected Docker proxy to reach only the app port", () => {
+    const source = readFileSync(releaseScript, "utf8")
+
+    expect(source).toContain('tcp|out|d=3000|d=${outbound_subnet}')
+    expect(source).toContain("csf -r")
+    expect(source).toContain("/etc/csf/csf.allow")
   })
 })

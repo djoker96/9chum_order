@@ -144,6 +144,36 @@ wait_for_url() {
   return 1
 }
 
+ensure_csf_docker_proxy_access() {
+  # CSF's default outbound policy rejects the host-side Docker proxy connection
+  # to the app bridge. Keep the exception scoped to this app network and port.
+  if ! command -v csf >/dev/null 2>&1 || [[ ! -f /etc/csf/csf.allow ]]; then
+    return 0
+  fi
+
+  local outbound_network="${OUTBOUND_NETWORK_NAME:-donhang-9chum-outbound}"
+  local outbound_subnet
+  outbound_subnet="$(docker network inspect \
+    --format '{{(index .IPAM.Config 0).Subnet}}' \
+    "${outbound_network}" 2>/dev/null || true)"
+  if [[ ! ${outbound_subnet} =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$ ]]; then
+    log "ERROR: Could not determine a valid IPv4 subnet for ${outbound_network}."
+    return 1
+  fi
+
+  local csf_rule="tcp|out|d=3000|d=${outbound_subnet}"
+  if grep -Fq "${csf_rule}" /etc/csf/csf.allow; then
+    return 0
+  fi
+
+  if [[ ! -e /etc/csf/csf.allow.pre-donhang ]]; then
+    cp -a /etc/csf/csf.allow /etc/csf/csf.allow.pre-donhang
+  fi
+  printf '%s # donhang-9chum Docker app proxy\n' "${csf_rule}" >>/etc/csf/csf.allow
+  log "Reloading CSF for the scoped Docker app proxy rule (${outbound_subnet}:3000)."
+  csf -r >/dev/null
+}
+
 rollback_app() {
   local previous_sha="${1:-}"
   local previous_compose="${RELEASES_DIR}/${previous_sha}/compose.production.yml"
@@ -201,6 +231,11 @@ log "Updating the application container."
 if ! compose up -d --no-deps app; then
   rollback_app "${previous_sha}"
   fail "Application update failed."
+fi
+
+if ! ensure_csf_docker_proxy_access; then
+  rollback_app "${previous_sha}"
+  fail "Could not allow the host proxy to reach the app container."
 fi
 
 if ! wait_for_url "http://127.0.0.1:${APP_PORT}/api/health" 40 3; then
