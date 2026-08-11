@@ -58,7 +58,7 @@ describe("GoogleSheetConfig", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/admin/products/google-sheet-config",
-      expect.objectContaining({ method: "PUT", body: JSON.stringify({ spreadsheetUrl: configResponse.data.spreadsheetUrl, sheetName: "Catalog" }) }),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ spreadsheetUrl: configResponse.data.spreadsheetUrl, sheetName: "Catalog" }) }),
     ))
     expect(await screen.findByText("Đã lưu cấu hình Google Sheets. Bạn có thể đồng bộ danh mục ngay.")).toBeInTheDocument()
   })

@@ -87,7 +87,7 @@ export function GoogleSheetConfig({ onConfiguredChange }: GoogleSheetConfigProps
     setError(null)
     try {
       const response = await fetch("/api/admin/products/google-sheet-config", {
-        method: "PUT",
+        method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ spreadsheetUrl, sheetName }),
       })

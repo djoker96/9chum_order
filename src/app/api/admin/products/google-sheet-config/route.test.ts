@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { AppError } from "@/server/http/api"
-import { GET, PUT } from "@/app/api/admin/products/google-sheet-config/route"
+import { GET, POST, PUT } from "@/app/api/admin/products/google-sheet-config/route"
 import { requireAdmin } from "@/server/auth/session"
 import {
   getGoogleSheetConfigView,
@@ -61,6 +61,20 @@ describe("/api/admin/products/google-sheet-config", () => {
       body: JSON.stringify({
         spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
         sheetName: " Products ",
+      }),
+    }))
+
+    expect(response.status).toBe(200)
+    expect(saveGoogleSheetConfig).toHaveBeenCalledWith({ spreadsheetId, sheetName: "Products" }, currentAdmin.id)
+  })
+
+  it("accepts POST for production proxies that block PUT", async () => {
+    const response = await POST(new NextRequest("http://localhost:3000/api/admin/products/google-sheet-config", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
+        sheetName: "Products",
       }),
     }))
 

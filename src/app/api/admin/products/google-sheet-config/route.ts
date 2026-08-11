@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+async function updateGoogleSheetConfig(request: NextRequest) {
   try {
     assertSameOrigin(request)
     assertApiRateLimit(request, "google-sheet-config-write", 20)
@@ -28,4 +28,14 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     return errorResponse(error)
   }
+}
+
+export async function PUT(request: NextRequest) {
+  return updateGoogleSheetConfig(request)
+}
+
+// Some production reverse proxies reject PUT before it reaches Next.js.
+// Keep PUT for direct API clients and expose POST for the browser form.
+export async function POST(request: NextRequest) {
+  return updateGoogleSheetConfig(request)
 }
