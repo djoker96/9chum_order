@@ -162,16 +162,39 @@ ensure_csf_docker_proxy_access() {
   fi
 
   local csf_rule="tcp|out|d=3000|d=${outbound_subnet}"
-  if grep -Fq "${csf_rule}" /etc/csf/csf.allow; then
-    return 0
+  if ! grep -Fq "${csf_rule}" /etc/csf/csf.allow; then
+    if [[ ! -e /etc/csf/csf.allow.pre-donhang ]]; then
+      cp -a /etc/csf/csf.allow /etc/csf/csf.allow.pre-donhang
+    fi
+    printf '%s # donhang-9chum Docker app proxy\n' "${csf_rule}" >>/etc/csf/csf.allow
   fi
 
-  if [[ ! -e /etc/csf/csf.allow.pre-donhang ]]; then
-    cp -a /etc/csf/csf.allow /etc/csf/csf.allow.pre-donhang
+  # Never run a CSF reload here: CSF is configured without Docker integration and
+  # its reload flushes Docker's DOCKER-FORWARD/DNAT chains. Insert one runtime
+  # rule instead; the advanced csf.allow entry remains for the next operator
+  # controlled firewall reload after Docker integration has been configured.
+  local network_id
+  local bridge_device
+  network_id="$(docker network inspect --format '{{.Id}}' "${outbound_network}" 2>/dev/null || true)"
+  bridge_device="$(docker network inspect \
+    --format '{{index .Options "com.docker.network.bridge.name"}}' \
+    "${outbound_network}" 2>/dev/null || true)"
+  if [[ -z ${bridge_device} && ${network_id} =~ ^[0-9a-f]{12,}$ ]]; then
+    bridge_device="br-${network_id:0:12}"
   fi
-  printf '%s # donhang-9chum Docker app proxy\n' "${csf_rule}" >>/etc/csf/csf.allow
-  log "Reloading CSF for the scoped Docker app proxy rule (${outbound_subnet}:3000)."
-  csf -r >/dev/null
+  [[ ${bridge_device} =~ ^br-[0-9a-f]{12}$ ]] \
+    || { log "ERROR: Could not determine a valid bridge device for ${outbound_network}."; return 1; }
+
+  command -v iptables >/dev/null 2>&1 \
+    || { log "ERROR: iptables is required for the CSF Docker proxy exception."; return 1; }
+  if ! iptables --wait -C OUTPUT \
+    -o "${bridge_device}" -d "${outbound_subnet}" \
+    -p tcp --dport 3000 -j ACCEPT 2>/dev/null; then
+    iptables --wait -I OUTPUT 1 \
+      -o "${bridge_device}" -d "${outbound_subnet}" \
+      -p tcp --dport 3000 -j ACCEPT
+  fi
+  log "Allowed host proxy traffic to ${outbound_subnet}:3000 on ${bridge_device} without reloading CSF."
 }
 
 rollback_app() {

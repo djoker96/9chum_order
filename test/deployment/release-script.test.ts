@@ -251,7 +251,9 @@ describe("host firewall integration", () => {
     const source = readFileSync(releaseScript, "utf8")
 
     expect(source).toContain('tcp|out|d=3000|d=${outbound_subnet}')
-    expect(source).toContain("csf -r")
     expect(source).toContain("/etc/csf/csf.allow")
+    expect(source).toContain('iptables --wait -C OUTPUT')
+    expect(source).toContain('iptables --wait -I OUTPUT 1')
+    expect(source).not.toContain("csf -r")
   })
 })
