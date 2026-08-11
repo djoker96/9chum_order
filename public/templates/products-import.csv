@@ -1,0 +1,3 @@
+id,product_name,concentration,volume,price,active
+SP001,Sản phẩm A,10%,30ml,150000,TRUE
+SP002,Sản phẩm B,20%,50ml,250000,FALSE

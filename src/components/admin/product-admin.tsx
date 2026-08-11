@@ -92,7 +92,7 @@ export function ProductAdmin() {
           <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div className="text-sm text-muted-foreground"><strong className="text-2xl font-semibold text-foreground">{result?.pagination.total ?? 0}</strong><span> sản phẩm trong database</span></div>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button type="button" onClick={() => void syncGoogleSheet()} disabled={isSyncing || isSheetConfigured === false}>{isSyncing ? "Đang sync..." : "Đồng bộ Google Sheets"}</Button>
+              <Button type="button" onClick={() => void syncGoogleSheet()} disabled={isSyncing || isSheetConfigured !== true}>{isSyncing ? "Đang sync..." : "Đồng bộ Google Sheets"}</Button>
               <Button variant="outline" type="button" onClick={() => fileInputRef.current?.click()} disabled={isSyncing}>Import Excel</Button>
               <input ref={fileInputRef} className="hidden" type="file" accept=".xlsx" onChange={(event) => void importExcel(event)} disabled={isSyncing} />
             </div>

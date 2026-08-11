@@ -15,6 +15,16 @@ describe("Google Sheet configuration", () => {
     })).toEqual({ spreadsheetId, sheetName: "Products" })
   })
 
+  it("accepts the production Sheet URL with a gid query and fragment", () => {
+    expect(parseGoogleSheetConfig({
+      spreadsheetUrl: "https://docs.google.com/spreadsheets/d/1J6Y5ksppmZ5fWSsQxRQzFoP-5HyBX994-2D0WaR9eF8/edit?gid=0#gid=0",
+      sheetName: "Products",
+    })).toEqual({
+      spreadsheetId: "1J6Y5ksppmZ5fWSsQxRQzFoP-5HyBX994-2D0WaR9eF8",
+      sheetName: "Products",
+    })
+  })
+
   it("accepts a raw spreadsheet ID for administrators who already have it", () => {
     expect(parseSpreadsheetId(spreadsheetId)).toBe(spreadsheetId)
     expect(buildSpreadsheetUrl(spreadsheetId)).toBe(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`)

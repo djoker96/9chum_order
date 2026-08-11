@@ -143,3 +143,44 @@ Trước khi bật timer, ghi nhận trong ticket vận hành: collector nào l�
 Qua HTTPS thật, kiểm tra admin login, tạo hóa đơn và lịch sử, tạo/vô hiệu hóa staff rồi xác nhận staff bị chặn login, import một file Excel hợp lệ, forged origin, restart app không mất dữ liệu và restore drill giữ nguyên invoice/sequence. Google Sheets cố ý để trống ở đợt đầu.
 
 Cuối cùng lưu audit/acceptance record, fingerprint deploy key, SHA đang chạy, vị trí backup và kết quả restore drill; không lưu secret.
+
+## 10. Cấu hình Google Sheets để import sản phẩm
+
+Luồng import là một chiều: admin bấm **Đồng bộ Google Sheets**, backend đọc tab sản phẩm bằng Service Account rồi upsert vào PostgreSQL. Frontend không gọi Google Sheets trực tiếp.
+
+### Chuẩn bị Google Cloud
+
+1. Chọn hoặc tạo một Google Cloud project và bật **Google Sheets API**.
+2. Tạo một **Service Account**, sau đó lấy `project_id`, `client_email` và private key JSON.
+3. Không commit private key vào Git hoặc đưa vào trình duyệt. Chỉ đặt ba giá trị này trong runtime secret của app:
+
+   ```env
+   GOOGLE_PROJECT_ID=your-project-id
+   GOOGLE_CLIENT_EMAIL=product-import@your-project-id.iam.gserviceaccount.com
+   GOOGLE_PRIVATE_KEY="private-key-value-with-\n-escapes"
+   ```
+
+   Ứng dụng tự đổi chuỗi `\n` thành newline trước khi tạo Google API client.
+
+### Tạo Sheet sản phẩm
+
+Tạo một spreadsheet, đặt tên tab là `Products` (hoặc tên khác nếu sẽ nhập trong trang quản trị), rồi dùng đúng hàng tiêu đề sau:
+
+```csv
+id,product_name,concentration,volume,price,active
+SP001,Sản phẩm A,10%,30ml,150000,TRUE
+SP002,Sản phẩm B,20%,50ml,250000,FALSE
+```
+
+Chia sẻ spreadsheet cho `GOOGLE_CLIENT_EMAIL` với quyền **Viewer**. Mã `id` phải duy nhất; `price` là số nguyên VNĐ không âm; `active` nhận `TRUE/FALSE`, `1/0`, `yes/no` hoặc `có/không`. Có thể tải mẫu tại `/templates/products-import.csv` ngay trên trang quản trị.
+
+### Kết nối trong ứng dụng
+
+1. Đảm bảo migration đã chạy: `npx prisma migrate deploy`.
+2. Đăng nhập tài khoản ADMIN và mở `/admin/products`.
+3. Dán URL spreadsheet, nhập đúng tên tab, bấm **Lưu cấu hình**.
+4. Bấm **Đồng bộ Google Sheets**. Kết quả hiển thị số dòng tạo mới, cập nhật, không đổi và lỗi.
+
+Nếu nút đồng bộ bị khóa, kiểm tra đủ ba biến credential trên server và quyền Viewer của Service Account. Dòng bị xóa khỏi Sheet không tự động xóa hoặc inactive sản phẩm trong database.
+
+Tài liệu tham khảo: [Google Sheets API Node.js quickstart](https://developers.google.com/workspace/sheets/api/quickstart/nodejs), [tạo Service Account](https://cloud.google.com/iam/docs/service-accounts-create), [chia sẻ spreadsheet](https://support.google.com/docs/answer/9331169).
