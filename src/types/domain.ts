@@ -1,5 +1,7 @@
 import type { InvoiceOutputData, InvoiceOutputItem } from "@/lib/invoice-text"
 
+export type { DiscountType } from "@/lib/money"
+
 export type PaymentMethod = "BANK_TRANSFER" | "COD"
 export type ShippingMethod = "FREE" | "DELIVERY_APP" | "COURIER"
 export const WAREHOUSE_OPTIONS = ["L7-21", "L7-22"] as const

@@ -8,6 +8,12 @@ const invoiceInfoSchema = z.object({
 })
 
 const warehouseSchema = z.enum(WAREHOUSE_OPTIONS).optional()
+const discountValueSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(Number.MAX_SAFE_INTEGER)
+  .refine((value) => Number.isSafeInteger(value), "Giá trị giảm phải là số nguyên hợp lệ.")
 
 export const createInvoiceSchema = z
   .object({
@@ -27,6 +33,8 @@ export const createInvoiceSchema = z
     paymentMethod: z.enum(["BANK_TRANSFER", "COD"]),
     shippingMethod: z.enum(["FREE", "DELIVERY_APP", "COURIER"]),
     shippingFee: z.number().int().min(0).max(100_000_000).default(0),
+    discountType: z.enum(["PERCENTAGE", "AMOUNT"]).default("PERCENTAGE"),
+    discountValue: discountValueSchema.default(0),
     note: z.string().trim().max(2_000).optional(),
     issueInvoice: z.boolean().default(false),
     invoiceInfo: invoiceInfoSchema.optional(),
@@ -37,6 +45,16 @@ export const createInvoiceSchema = z
         code: "custom",
         path: ["invoiceInfo"],
         message: "Thông tin xuất hóa đơn là bắt buộc.",
+      })
+    }
+    if (data.discountType === "PERCENTAGE" && data.discountValue > 100) {
+      context.addIssue({
+        code: "too_big",
+        maximum: 100,
+        origin: "number",
+        inclusive: true,
+        path: ["discountValue"],
+        message: "Phần trăm giảm giá phải từ 0 đến 100%.",
       })
     }
   })

@@ -10,6 +10,9 @@ const invoice = {
   shippingMethod: "DELIVERY_APP",
   shippingFee: 50000,
   subtotal: 300000,
+  discountType: "PERCENTAGE" as const,
+  discountValue: 0,
+  discountAmount: 0,
   total: 350000,
   note: "Giao sau 18h",
   issueInvoice: false,
@@ -40,6 +43,8 @@ describe("invoice output helpers", () => {
       paymentMethod: "COD",
       shippingFee: 0,
       subtotal: 680000,
+      discountValue: 0,
+      discountAmount: 0,
       total: 680000,
       note: "abc",
       items: [
@@ -85,5 +90,30 @@ describe("invoice output helpers", () => {
 
     expect(text).toContain("Vận chuyển: Free ship")
     expect(text).toContain("Tên đơn vị: ABC Company")
+  })
+
+  it("includes the selected discount method, value, and deducted amount", () => {
+    const percentageText = buildInvoicePlainText({
+      ...invoice,
+      discountType: "PERCENTAGE",
+      discountValue: 10,
+      discountAmount: 30000,
+      total: 320000,
+    })
+    const amountText = buildInvoicePlainText({
+      ...invoice,
+      discountType: "AMOUNT",
+      discountValue: 50000,
+      discountAmount: 50000,
+      total: 300000,
+    })
+
+    expect(percentageText).toContain("Giảm giá (theo %): 10% (-30.000đ)")
+    expect(amountText).toContain("Giảm giá (theo số tiền): 50.000đ (-50.000đ)")
+    expect(percentageText.indexOf("Giảm giá")).toBeGreaterThan(percentageText.indexOf("Tiền hàng"))
+  })
+
+  it("hides the discount line when the discount value is zero", () => {
+    expect(buildInvoicePlainText(invoice)).not.toContain("Giảm giá")
   })
 })

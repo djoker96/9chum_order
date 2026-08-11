@@ -1,3 +1,5 @@
+import type { DiscountType } from "@/lib/money"
+
 export interface InvoiceOutputItem {
   productName: string
   volume: string
@@ -17,6 +19,9 @@ export interface InvoiceOutputData {
   shippingMethod: string
   shippingFee: number
   subtotal: number
+  discountType: DiscountType
+  discountValue: number
+  discountAmount: number
   total: number
   note?: string | null
   issueInvoice: boolean
@@ -39,6 +44,19 @@ const shippingLabels: Record<string, string> = {
 
 export function formatVnd(value: number): string {
   return `${new Intl.NumberFormat("vi-VN").format(value)}đ`
+}
+
+export function formatDiscountValue(discountType: DiscountType, discountValue: number): string {
+  return discountType === "PERCENTAGE" ? `${discountValue}%` : formatVnd(discountValue)
+}
+
+export function formatDiscountLabel(discountType: DiscountType, discountValue: number): string {
+  return `Giảm giá (${formatDiscountValue(discountType, discountValue)})`
+}
+
+export function formatDiscountLine(invoice: Pick<InvoiceOutputData, "discountType" | "discountValue" | "discountAmount">): string {
+  const methodLabel = invoice.discountType === "PERCENTAGE" ? "theo %" : "theo số tiền"
+  return `Giảm giá (${methodLabel}): ${formatDiscountValue(invoice.discountType, invoice.discountValue)} (-${formatVnd(invoice.discountAmount)})`
 }
 
 function formatConcentration(value: string): string {
@@ -66,6 +84,7 @@ export function buildInvoicePlainText(invoice: InvoiceOutputData): string {
     ...itemLines,
     "--------------------",
     `Tiền hàng: ${formatVnd(invoice.subtotal)}`,
+    ...(invoice.discountValue > 0 ? [formatDiscountLine(invoice)] : []),
     `Thanh toán: ${paymentLabels[invoice.paymentMethod] ?? invoice.paymentMethod}`,
     ...shippingLines,
     ...(invoice.note ? [`Ghi chú: ${invoice.note}`] : []),

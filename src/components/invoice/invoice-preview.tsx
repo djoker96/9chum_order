@@ -1,5 +1,5 @@
 import { forwardRef } from "react"
-import { formatVnd, type InvoiceOutputData } from "@/lib/invoice-text"
+import { formatDiscountLabel, formatVnd, type InvoiceOutputData } from "@/lib/invoice-text"
 
 interface InvoicePreviewProps {
   invoice: InvoiceOutputData
@@ -50,6 +50,7 @@ export const InvoicePreview = forwardRef<HTMLElement, InvoicePreviewProps>(funct
 
       <section className="invoice-summary grid gap-2 border-t py-4 text-xs">
         <div className="flex justify-between gap-3"><span className="text-muted-foreground">Tiền hàng</span><strong>{formatVnd(invoice.subtotal)}</strong></div>
+        {invoice.discountValue > 0 && <div className="flex justify-between gap-3"><span className="text-muted-foreground">{formatDiscountLabel(invoice.discountType, invoice.discountValue)}</span><strong className="text-destructive">-{formatVnd(invoice.discountAmount)}</strong></div>}
         <div className="flex justify-between gap-3"><span className="text-muted-foreground">Thanh toán</span><strong>{(paymentLabels[invoice.paymentMethod] ?? invoice.paymentMethod) || "-"}</strong></div>
         <div className="flex justify-between gap-3"><span className="text-muted-foreground">Vận chuyển</span><strong>{(shippingLabels[invoice.shippingMethod] ?? invoice.shippingMethod) || "-"}</strong></div>
         {invoice.shippingMethod !== "FREE" && invoice.shippingFee > 0 && <div className="flex justify-between gap-3"><span className="text-muted-foreground">Phí ship</span><strong>{formatVnd(invoice.shippingFee)}</strong></div>}

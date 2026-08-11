@@ -14,10 +14,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { InvoiceActions } from "@/components/invoice/invoice-actions"
 import { InvoicePreview } from "@/components/invoice/invoice-preview"
+import { calculateInvoiceTotals, type DiscountType } from "@/lib/money"
 import { formatVnd, type InvoiceOutputData } from "@/lib/invoice-text"
 import { WAREHOUSE_OPTIONS, type InvoiceFormItem, type InvoiceRecord, type PaymentMethod, type ProductVariant, type ShippingMethod, type Warehouse } from "@/types/domain"
 
 const emptyItem = (): InvoiceFormItem => ({ productId: "", name: "", volume: "", concentration: "", quantity: 1 })
+
+function parseNonNegativeInteger(value: string): number {
+  const parsedValue = Number(value)
+  if (!Number.isFinite(parsedValue)) return 0
+  return Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.trunc(parsedValue)))
+}
 
 export function InvoiceForm() {
   const previewRef = useRef<HTMLElement>(null)
@@ -30,6 +37,8 @@ export function InvoiceForm() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("BANK_TRANSFER")
   const [shippingMethod, setShippingMethod] = useState<ShippingMethod>("FREE")
   const [shippingFee, setShippingFee] = useState(0)
+  const [discountType, setDiscountType] = useState<DiscountType>("PERCENTAGE")
+  const [discountValue, setDiscountValue] = useState(0)
   const [note, setNote] = useState("")
   const [issueInvoice, setIssueInvoice] = useState(false)
   const [invoiceInfo, setInvoiceInfo] = useState({ companyName: "", address: "", email: "" })
@@ -57,20 +66,28 @@ export function InvoiceForm() {
   }, [])
 
   const previewInvoice = useMemo<InvoiceOutputData>(() => {
-    const outputItems = items.map((item) => {
+    const lineInputs = items.map((item) => {
       const product = products.find((candidate) => candidate.id === item.productId)
       const unitPrice = product?.price ?? 0
+      return {
+        unitPrice,
+        quantity: item.quantity,
+      }
+    })
+    const subtotal = lineInputs.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
+    const previewDiscountValue = discountType === "AMOUNT" ? Math.min(discountValue, subtotal) : discountValue
+    const totals = calculateInvoiceTotals(lineInputs, shippingFee, shippingMethod, discountType, previewDiscountValue)
+    const outputItems = items.map((item, index) => {
+      const product = products.find((candidate) => candidate.id === item.productId)
       return {
         productName: product?.name ?? item.name,
         volume: product?.volume ?? item.volume,
         concentration: product?.concentration ?? item.concentration,
-        unitPrice,
+        unitPrice: lineInputs[index]?.unitPrice ?? 0,
         quantity: item.quantity,
-        lineTotal: unitPrice * item.quantity,
+        lineTotal: totals.lineTotals[index] ?? 0,
       }
     })
-    const subtotal = outputItems.reduce((sum, item) => sum + item.lineTotal, 0)
-    const normalizedShippingFee = shippingMethod === "FREE" ? 0 : shippingFee
     return {
       customerName,
       phone,
@@ -78,9 +95,12 @@ export function InvoiceForm() {
       warehouse: warehouse || null,
       paymentMethod,
       shippingMethod,
-      shippingFee: normalizedShippingFee,
-      subtotal,
-      total: subtotal + normalizedShippingFee,
+      shippingFee: totals.shippingFee,
+      subtotal: totals.subtotal,
+      discountType: totals.discountType,
+      discountValue: totals.discountValue,
+      discountAmount: totals.discountAmount,
+      total: totals.total,
       note,
       issueInvoice,
       companyName: issueInvoice ? invoiceInfo.companyName : null,
@@ -88,7 +108,7 @@ export function InvoiceForm() {
       invoiceEmail: issueInvoice ? invoiceInfo.email : null,
       items: outputItems,
     }
-  }, [address, customerName, invoiceInfo, issueInvoice, items, note, paymentMethod, phone, products, shippingFee, shippingMethod, warehouse])
+  }, [address, customerName, discountType, discountValue, invoiceInfo, issueInvoice, items, note, paymentMethod, phone, products, shippingFee, shippingMethod, warehouse])
 
   function updateItem(index: number, changes: Partial<InvoiceFormItem>): void {
     setItems((currentItems) => currentItems.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item))
@@ -126,6 +146,8 @@ export function InvoiceForm() {
           paymentMethod,
           shippingMethod,
           shippingFee,
+          discountType,
+          discountValue,
           note: note || undefined,
           issueInvoice,
           invoiceInfo: issueInvoice ? invoiceInfo : undefined,
@@ -150,6 +172,8 @@ export function InvoiceForm() {
     setPaymentMethod("BANK_TRANSFER")
     setShippingMethod("FREE")
     setShippingFee(0)
+    setDiscountType("PERCENTAGE")
+    setDiscountValue(0)
     setNote("")
     setIssueInvoice(false)
     setInvoiceInfo({ companyName: "", address: "", email: "" })
@@ -201,6 +225,39 @@ export function InvoiceForm() {
             <fieldset className="space-y-3 rounded-lg border p-4"><legend className="px-1 text-sm font-medium">Thanh toán</legend><RadioGroup className="flex flex-wrap gap-x-5 gap-y-3" value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}><label className="flex items-center gap-2 text-sm"><RadioGroupItem value="BANK_TRANSFER" /><span>Chuyển khoản</span></label><label className="flex items-center gap-2 text-sm"><RadioGroupItem value="COD" /><span>COD</span></label></RadioGroup></fieldset>
             <fieldset className="space-y-3 rounded-lg border p-4"><legend className="px-1 text-sm font-medium">Vận chuyển</legend><RadioGroup className="flex flex-wrap gap-x-5 gap-y-3" value={shippingMethod} onValueChange={(value) => { const method = value as ShippingMethod; setShippingMethod(method); if (method === "FREE") setShippingFee(0) }}><label className="flex items-center gap-2 text-sm"><RadioGroupItem value="FREE" /><span>Free ship</span></label><label className="flex items-center gap-2 text-sm"><RadioGroupItem value="DELIVERY_APP" /><span>App giao hàng</span></label><label className="flex items-center gap-2 text-sm"><RadioGroupItem value="COURIER" /><span>Xe / đơn vị vận chuyển</span></label></RadioGroup>{shippingMethod !== "FREE" && <div className="mt-3 max-w-xs space-y-2"><Label htmlFor="shipping-fee">Phí ship</Label><Input className="h-9" id="shipping-fee" type="number" min={0} value={shippingFee} onChange={(event) => setShippingFee(Math.max(0, Number(event.target.value) || 0))} /></div>}</fieldset>
             <fieldset className="space-y-3 rounded-lg border p-4"><legend className="px-1 text-sm font-medium">Kho</legend><RadioGroup className="flex flex-wrap gap-x-5 gap-y-3" value={warehouse || "NONE"} onValueChange={(value) => setWarehouse(value === "NONE" ? "" : value as Warehouse)}><label className="flex items-center gap-2 text-sm"><RadioGroupItem value="NONE" /><span>Không chọn</span></label>{WAREHOUSE_OPTIONS.map((option) => <label className="flex items-center gap-2 text-sm" key={option}><RadioGroupItem value={option} /><span>Xuất kho {option}</span></label>)}</RadioGroup></fieldset>
+            <fieldset className="space-y-3 rounded-lg border p-4">
+              <legend className="px-1 text-sm font-medium">Giảm giá</legend>
+              <RadioGroup
+                className="flex flex-wrap gap-x-5 gap-y-3"
+                value={discountType}
+                onValueChange={(value) => {
+                  const nextType = value as DiscountType
+                  setDiscountType(nextType)
+                  if (nextType === "PERCENTAGE") setDiscountValue((current) => Math.min(current, 100))
+                  setCreatedInvoice(null)
+                }}
+              >
+                <label className="flex items-center gap-2 text-sm"><RadioGroupItem value="PERCENTAGE" /><span>Theo %</span></label>
+                <label className="flex items-center gap-2 text-sm"><RadioGroupItem value="AMOUNT" /><span>Theo số tiền</span></label>
+              </RadioGroup>
+              <div className="mt-3 max-w-xs space-y-2">
+                <Label htmlFor="discount-value">Mức giảm ({discountType === "PERCENTAGE" ? "%" : "đ"})</Label>
+                <Input
+                  className="h-9"
+                  id="discount-value"
+                  type="number"
+                  min={0}
+                  max={discountType === "PERCENTAGE" ? 100 : undefined}
+                  step={1}
+                  value={discountValue}
+                  onChange={(event) => {
+                    const value = parseNonNegativeInteger(event.target.value)
+                    setDiscountValue(discountType === "PERCENTAGE" ? Math.min(value, 100) : value)
+                    setCreatedInvoice(null)
+                  }}
+                />
+              </div>
+            </fieldset>
 
             <div className="space-y-2"><Label htmlFor="note">Ghi chú</Label><Textarea id="note" value={note} onChange={(event) => setNote(event.target.value)} rows={2} /></div>
             <fieldset className="space-y-3 rounded-lg border p-4"><legend className="px-1 text-sm font-medium">Xuất hóa đơn</legend><RadioGroup className="flex flex-wrap gap-x-5 gap-y-3" value={issueInvoice ? "YES" : "NO"} onValueChange={(value) => setIssueInvoice(value === "YES")}><label className="flex items-center gap-2 text-sm"><RadioGroupItem value="NO" /><span>Không</span></label><label className="flex items-center gap-2 text-sm"><RadioGroupItem value="YES" /><span>Có</span></label></RadioGroup>{issueInvoice && <div className="mt-3 grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="company-name">Tên đơn vị</Label><Input className="h-9" id="company-name" value={invoiceInfo.companyName} onChange={(event) => setInvoiceInfo((current) => ({ ...current, companyName: event.target.value }))} /></div><div className="space-y-2"><Label htmlFor="invoice-address">Địa chỉ xuất hóa đơn</Label><Input className="h-9" id="invoice-address" value={invoiceInfo.address} onChange={(event) => setInvoiceInfo((current) => ({ ...current, address: event.target.value }))} /></div><div className="space-y-2 sm:col-span-2"><Label htmlFor="invoice-email">Email xuất hóa đơn</Label><Input className="h-9" id="invoice-email" type="email" value={invoiceInfo.email} onChange={(event) => setInvoiceInfo((current) => ({ ...current, email: event.target.value }))} /></div></div>}</fieldset>

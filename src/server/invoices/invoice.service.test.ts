@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { resolveInvoiceDraft, type InvoiceProduct } from "@/server/invoices/invoice.service"
+import { AppError } from "@/server/http/api"
+import { resolveInvoiceDraft, serializeInvoice, type InvoiceProduct } from "@/server/invoices/invoice.service"
 
 const products: InvoiceProduct[] = [
   { id: "product-1", name: "Sản phẩm A", volume: "30ml", concentration: "10%", price: 150000, isActive: true },
@@ -14,6 +15,8 @@ const input = {
   paymentMethod: "BANK_TRANSFER" as const,
   shippingMethod: "DELIVERY_APP" as const,
   shippingFee: 50000,
+  discountType: "PERCENTAGE" as const,
+  discountValue: 0,
   issueInvoice: false,
   invoiceInfo: undefined,
 }
@@ -34,7 +37,28 @@ describe("resolveInvoiceDraft", () => {
       },
     ])
     expect(result.subtotal).toBe(300000)
+    expect(result.discountAmount).toBe(0)
     expect(result.total).toBe(350000)
+  })
+
+  it("calculates the discount from the database-backed product price", () => {
+    const result = resolveInvoiceDraft({ ...input, discountType: "PERCENTAGE", discountValue: 10 }, products)
+
+    expect(result.subtotal).toBe(300000)
+    expect(result.discountAmount).toBe(30000)
+    expect(result.total).toBe(320000)
+  })
+
+  it("rejects a fixed discount above the database subtotal with a 400 error", () => {
+    let caught: unknown
+    try {
+      resolveInvoiceDraft({ ...input, discountType: "AMOUNT", discountValue: 300001 }, products)
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(AppError)
+    expect(caught).toMatchObject({ status: 400, code: "DISCOUNT_EXCEEDS_SUBTOTAL" })
   })
 
   it("normalizes free shipping regardless of a client-provided fee", () => {
@@ -52,5 +76,40 @@ describe("resolveInvoiceDraft", () => {
 
   it("rejects unavailable products instead of creating a partial invoice", () => {
     expect(() => resolveInvoiceDraft({ ...input, items: [{ productId: "missing", quantity: 1 }] }, products)).toThrow("Product không tồn tại hoặc đã ngừng bán")
+  })
+
+  it("serializes discount fields and decimal-like money values", () => {
+    const result = serializeInvoice({
+      id: "invoice-1",
+      invoiceNumber: "HD-10082026-0001",
+      customerName: "Nguyễn Văn A",
+      phone: "0901234567",
+      address: "Hà Nội",
+      warehouse: null,
+      paymentMethod: "BANK_TRANSFER",
+      shippingMethod: "DELIVERY_APP",
+      shippingFee: "50000",
+      subtotal: "300000",
+      discountType: "PERCENTAGE",
+      discountValue: "10",
+      discountAmount: "30000",
+      total: "320000",
+      note: null,
+      issueInvoice: false,
+      companyName: null,
+      invoiceAddress: null,
+      invoiceEmail: null,
+      status: "CONFIRMED",
+      createdAt: new Date("2026-08-10T00:00:00.000Z"),
+      updatedAt: new Date("2026-08-10T00:00:00.000Z"),
+      items: [],
+    })
+
+    expect(result).toMatchObject({
+      discountType: "PERCENTAGE",
+      discountValue: 10,
+      discountAmount: 30000,
+      total: 320000,
+    })
   })
 })

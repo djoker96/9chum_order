@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
-import { calculateInvoiceTotals } from "@/lib/money"
+import { calculateInvoiceTotals, type DiscountType } from "@/lib/money"
 import { formatInvoiceNumber, formatInvoiceNumberDate } from "@/lib/invoice-number"
 import { AppError } from "@/server/http/api"
 import type { CreateInvoiceInput } from "@/server/validators/invoice.schema"
@@ -34,6 +34,9 @@ export interface ResolvedInvoiceDraft {
   shippingMethod: CreateInvoiceInput["shippingMethod"]
   shippingFee: number
   subtotal: number
+  discountType: DiscountType
+  discountValue: number
+  discountAmount: number
   total: number
   note: string | null
   issueInvoice: boolean
@@ -67,11 +70,27 @@ export function resolveInvoiceDraft(input: CreateInvoiceInput, products: Invoice
       lineTotal: product.price * item.quantity,
     }
   })
-  const totals = calculateInvoiceTotals(
-    items.map(({ unitPrice, quantity }) => ({ unitPrice, quantity })),
-    input.shippingFee,
-    input.shippingMethod,
-  )
+  let totals
+  try {
+    totals = calculateInvoiceTotals(
+      items.map(({ unitPrice, quantity }) => ({ unitPrice, quantity })),
+      input.shippingFee,
+      input.shippingMethod,
+      input.discountType,
+      input.discountValue,
+    )
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Discount")) {
+      const isExceeded = error.message === "Discount amount must not exceed subtotal"
+      throw new AppError(
+        400,
+        isExceeded ? "DISCOUNT_EXCEEDS_SUBTOTAL" : "INVALID_DISCOUNT",
+        isExceeded ? "Tiền giảm không được vượt quá tiền hàng." : error.message,
+        { discountValue: [isExceeded ? "Tiền giảm không được vượt quá tiền hàng." : error.message] },
+      )
+    }
+    throw error
+  }
   const invoiceInfo = input.issueInvoice ? input.invoiceInfo : undefined
 
   return {
@@ -83,6 +102,9 @@ export function resolveInvoiceDraft(input: CreateInvoiceInput, products: Invoice
     shippingMethod: input.shippingMethod,
     shippingFee: totals.shippingFee,
     subtotal: totals.subtotal,
+    discountType: totals.discountType,
+    discountValue: totals.discountValue,
+    discountAmount: totals.discountAmount,
     total: totals.total,
     note: input.note || null,
     issueInvoice: input.issueInvoice,
@@ -138,6 +160,9 @@ export async function createInvoice(input: CreateInvoiceInput, createdById: stri
         shippingMethod: draft.shippingMethod,
         shippingFee: draft.shippingFee,
         subtotal: draft.subtotal,
+        discountType: draft.discountType,
+        discountValue: draft.discountValue,
+        discountAmount: draft.discountAmount,
         total: draft.total,
         note: draft.note,
         issueInvoice: draft.issueInvoice,
@@ -174,6 +199,9 @@ export function serializeInvoice(invoice: {
   shippingMethod: string
   shippingFee: unknown
   subtotal: unknown
+  discountType: DiscountType
+  discountValue: unknown
+  discountAmount: unknown
   total: unknown
   note: string | null
   issueInvoice: boolean
@@ -199,6 +227,8 @@ export function serializeInvoice(invoice: {
     ...invoice,
     shippingFee: Number(invoice.shippingFee),
     subtotal: Number(invoice.subtotal),
+    discountValue: Number(invoice.discountValue),
+    discountAmount: Number(invoice.discountAmount),
     total: Number(invoice.total),
     items: invoice.items.map((item) => ({
       ...item,

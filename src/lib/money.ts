@@ -1,4 +1,5 @@
 export type ShippingMethod = "FREE" | "DELIVERY_APP" | "COURIER"
+export type DiscountType = "PERCENTAGE" | "AMOUNT"
 
 export interface InvoiceLineInput {
   unitPrice: number
@@ -8,6 +9,9 @@ export interface InvoiceLineInput {
 export interface InvoiceTotals {
   lineTotals: number[]
   subtotal: number
+  discountType: DiscountType
+  discountValue: number
+  discountAmount: number
   shippingFee: number
   total: number
 }
@@ -28,8 +32,18 @@ export function calculateInvoiceTotals(
   lines: InvoiceLineInput[],
   requestedShippingFee: number,
   shippingMethod: ShippingMethod = "DELIVERY_APP",
+  discountType: DiscountType = "PERCENTAGE",
+  discountValue = 0,
 ): InvoiceTotals {
   assertNonNegativeInteger(requestedShippingFee, "Shipping fee")
+  assertNonNegativeInteger(discountValue, "Discount value")
+
+  if (discountType !== "PERCENTAGE" && discountType !== "AMOUNT") {
+    throw new Error("Discount type is invalid")
+  }
+  if (discountType === "PERCENTAGE" && discountValue > 100) {
+    throw new Error("Discount percentage must be between 0 and 100")
+  }
 
   const lineTotals = lines.map(({ unitPrice, quantity }) => {
     assertNonNegativeInteger(unitPrice, "Unit price")
@@ -48,11 +62,26 @@ export function calculateInvoiceTotals(
     throw new Error("Subtotal exceeds the supported amount")
   }
 
+  const discountAmount = discountType === "PERCENTAGE"
+    ? (() => {
+        const wholePercentage = Math.floor(subtotal / 100)
+        const remainder = subtotal - wholePercentage * 100
+        return wholePercentage * discountValue + Math.round((remainder * discountValue) / 100)
+      })()
+    : discountValue
+
+  if (!Number.isSafeInteger(discountAmount)) {
+    throw new Error("Discount amount exceeds the supported amount")
+  }
+  if (discountAmount > subtotal) {
+    throw new Error("Discount amount must not exceed subtotal")
+  }
+
   const shippingFee = shippingMethod === "FREE" ? 0 : requestedShippingFee
-  const total = subtotal + shippingFee
+  const total = subtotal - discountAmount + shippingFee
   if (!Number.isSafeInteger(total)) {
     throw new Error("Total exceeds the supported amount")
   }
 
-  return { lineTotals, subtotal, shippingFee, total }
+  return { lineTotals, subtotal, discountType, discountValue, discountAmount, shippingFee, total }
 }
