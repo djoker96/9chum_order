@@ -41,7 +41,7 @@ export const InvoicePreview = forwardRef<HTMLElement, InvoicePreviewProps>(funct
       <Image
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-[105px] z-0 w-[430px] max-w-none -translate-x-1/2 opacity-[0.095]"
+        className="pointer-events-none absolute left-1/2 top-[105px] z-0 w-[480px] max-w-none -translate-x-1/2 opacity-[0.3]"
         height={755}
         priority
         src={previewBackground}
