@@ -3,7 +3,7 @@ import { forwardRef, type ReactNode } from "react"
 import invoiceLogo from "@/app/icon.png"
 import previewBackground from "@/app/image/bg-preview.png"
 import bankTransferQr from "@/app/image/chuyenkhoan.png"
-import { formatDiscountLabel, formatVnd, type InvoiceOutputData } from "@/lib/invoice-text"
+import { formatConcentration, formatDiscountLabel, formatVnd, type InvoiceOutputData } from "@/lib/invoice-text"
 
 interface InvoicePreviewProps {
   invoice: InvoiceOutputData
@@ -71,7 +71,7 @@ export const InvoicePreview = forwardRef<HTMLElement, InvoicePreviewProps>(funct
           <div className="invoice-item flex justify-between gap-3 border-b border-[#d8d8d8] py-3 last:border-b-0" key={`${item.productName}-${item.volume}-${item.concentration}-${index}`}>
             <div className="min-w-0">
               <strong className="block text-[15px] leading-5">{item.quantity} x {item.productName || "Sản phẩm"}</strong>
-              <span className="mt-0.5 block text-[13px] text-[#666666]">{item.volume || "-"} - {item.concentration || "-"}</span>
+              <span className="mt-0.5 block text-[13px] text-[#666666]">{item.volume || "-"} - {item.concentration ? formatConcentration(item.concentration) : "-"}</span>
             </div>
             <div className="invoice-item-price grid shrink-0 justify-items-end gap-0.5 text-right">
               <span className="text-[12px] text-[#666666]">{formatVnd(item.unitPrice)} x {item.quantity}</span>

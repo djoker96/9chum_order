@@ -65,11 +65,11 @@ describe("invoice output helpers", () => {
       "Tiền hàng: 680.000đ",
       "Thanh toán: COD",
       "Vận chuyển: Ship qua app giao hàng",
-      "Phí ship: 0đ",
       "Ghi chú: abc",
       "--------------------",
       "Tổng cộng: 680.000đ",
     ].join("\n"))
+    expect(text).not.toContain("Phí ship")
   })
 
   it("sanitizes customer names for downloaded filenames", () => {

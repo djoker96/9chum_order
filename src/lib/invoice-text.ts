@@ -59,7 +59,7 @@ export function formatDiscountLine(invoice: Pick<InvoiceOutputData, "discountTyp
   return `Giảm giá (${methodLabel}): ${formatDiscountValue(invoice.discountType, invoice.discountValue)} (-${formatVnd(invoice.discountAmount)})`
 }
 
-function formatConcentration(value: string): string {
+export function formatConcentration(value: string): string {
   return value.trim().replace(/\s*%$/, " độ")
 }
 
@@ -67,9 +67,10 @@ export function buildInvoicePlainText(invoice: InvoiceOutputData): string {
   const itemLines = invoice.items.map((item) =>
     `- ${item.quantity} ${item.productName} - ${item.volume} - ${formatConcentration(item.concentration)}: ${formatVnd(item.unitPrice)} × ${item.quantity} = ${formatVnd(item.lineTotal)}`,
   )
-  const shippingLines = invoice.shippingMethod === "FREE"
-    ? [`Vận chuyển: ${shippingLabels[invoice.shippingMethod]}`]
-    : [`Vận chuyển: ${shippingLabels[invoice.shippingMethod] ?? invoice.shippingMethod}`, `Phí ship: ${formatVnd(invoice.shippingFee)}`]
+  const shippingLines = [
+    `Vận chuyển: ${shippingLabels[invoice.shippingMethod] ?? invoice.shippingMethod}`,
+    ...(invoice.shippingMethod !== "FREE" && invoice.shippingFee > 0 ? [`Phí ship: ${formatVnd(invoice.shippingFee)}`] : []),
+  ]
   const companyLines = invoice.issueInvoice
     ? ["", "Thông tin xuất hóa đơn:", `Tên đơn vị: ${invoice.companyName ?? ""}`, `Địa chỉ: ${invoice.invoiceAddress ?? ""}`, `Email: ${invoice.invoiceEmail ?? ""}`]
     : []

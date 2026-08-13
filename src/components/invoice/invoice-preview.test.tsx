@@ -22,7 +22,7 @@ const invoice: InvoiceOutputData = {
   companyName: "CTCP 9CHUM",
   invoiceAddress: "Hà Nội",
   invoiceEmail: "ketoan@9chum.vn",
-  items: [{ productName: "Rượu mơ rừng", volume: "3 lít", concentration: "25 độ", quantity: 2, unitPrice: 150_000, lineTotal: 300_000 }],
+  items: [{ productName: "Rượu mơ rừng", volume: "3 lít", concentration: "25%", quantity: 2, unitPrice: 150_000, lineTotal: 300_000 }],
 }
 
 describe("InvoicePreview", () => {
