@@ -113,7 +113,7 @@ export const InvoicePreview = forwardRef<HTMLElement, InvoicePreviewProps>(funct
             <span>CTCP THUONG MAI DOUBLE K</span>
             <span>1913 5082 2100 11</span>
           </div>
-          <Image alt="Mã QR thanh toán Techcombank" className="h-auto w-full rounded-md" height={293} src={bankTransferQr} width={216} />
+          <Image alt="Mã QR thanh toán Techcombank" className="h-auto w-full rounded-md" height={293} loading="eager" src={bankTransferQr} width={216} />
         </section>
       )}
     </article>

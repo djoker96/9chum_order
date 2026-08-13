@@ -4,6 +4,7 @@ import { RefObject, useState } from "react"
 import { CopyIcon, FilePdfIcon, ImageIcon } from "@phosphor-icons/react"
 import { buildInvoicePlainText, safeInvoiceFileName, type InvoiceOutputData } from "@/lib/invoice-text"
 import { Button } from "@/components/ui/button"
+import { calculatePdfPageLayout, cropInvoiceImage, getInvoiceCaptureOptions, waitForInvoicePreviewReady } from "@/components/invoice/invoice-export"
 
 interface InvoiceActionsProps {
   invoice: InvoiceOutputData
@@ -28,7 +29,7 @@ export function InvoiceActions({ invoice, targetRef }: InvoiceActionsProps) {
     setIsExporting(true)
     try {
       const { toPng } = await import("html-to-image")
-      const dataUrl = await toPng(targetRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 })
+      const dataUrl = await captureInvoicePng(targetRef.current, toPng)
       downloadDataUrl(dataUrl, safeInvoiceFileName(invoice.customerName, "png"))
       setMessage("Đã xuất PNG.")
     } catch {
@@ -43,23 +44,18 @@ export function InvoiceActions({ invoice, targetRef }: InvoiceActionsProps) {
     setIsExporting(true)
     try {
       const [{ toPng }, { jsPDF }] = await Promise.all([import("html-to-image"), import("jspdf")])
-      const dataUrl = await toPng(targetRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 })
+      const dataUrl = await captureInvoicePng(targetRef.current, toPng)
       const image = await loadImage(dataUrl)
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
       const pageWidth = pdf.internal.pageSize.getWidth()
       const pageHeight = pdf.internal.pageSize.getHeight()
-      const imageHeight = (image.height / image.width) * pageWidth
-      let remainingHeight = imageHeight
-      let yPosition = 0
+      const layout = calculatePdfPageLayout(image.width, image.height, pageWidth, pageHeight)
 
-      pdf.addImage(dataUrl, "PNG", 0, yPosition, pageWidth, imageHeight)
-      remainingHeight -= pageHeight
-      while (remainingHeight > 0) {
-        yPosition -= pageHeight
-        pdf.addPage()
-        pdf.addImage(dataUrl, "PNG", 0, yPosition, pageWidth, imageHeight)
-        remainingHeight -= pageHeight
-      }
+      layout.pages.forEach((page, index) => {
+        if (index > 0) pdf.addPage()
+        const pageDataUrl = layout.pages.length === 1 ? dataUrl : cropInvoiceImage(image, page)
+        pdf.addImage(pageDataUrl, "PNG", page.x, page.y, page.width, page.height)
+      })
       pdf.save(safeInvoiceFileName(invoice.customerName, "pdf"))
       setMessage("Đã xuất PDF.")
     } catch {
@@ -83,7 +79,17 @@ function downloadDataUrl(dataUrl: string, fileName: string): void {
   const link = document.createElement("a")
   link.download = fileName
   link.href = dataUrl
+  document.body.appendChild(link)
   link.click()
+  link.remove()
+}
+
+async function captureInvoicePng(
+  node: HTMLElement,
+  toPng: (node: HTMLElement, options: ReturnType<typeof getInvoiceCaptureOptions>) => Promise<string>,
+): Promise<string> {
+  await waitForInvoicePreviewReady(node)
+  return toPng(node, getInvoiceCaptureOptions(node))
 }
 
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
