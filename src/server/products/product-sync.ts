@@ -1,4 +1,4 @@
-const REQUIRED_FIELDS = ["id", "product_name", "concentration", "volume", "price", "active"] as const
+const REQUIRED_FIELDS = ["id", "product_name", "volume", "price", "active"] as const
 
 export interface ProductRow {
   externalId: string

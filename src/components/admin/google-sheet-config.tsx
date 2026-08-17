@@ -23,7 +23,7 @@ interface GoogleSheetConfigProps {
 const REQUIRED_COLUMNS = [
   { name: "id", description: "Mã sản phẩm duy nhất" },
   { name: "product_name", description: "Tên sản phẩm" },
-  { name: "concentration", description: "Nồng độ, ví dụ 10%" },
+  { name: "concentration", description: "Nồng độ, ví dụ 10%; có thể để trống" },
   { name: "volume", description: "Dung tích, ví dụ 30ml" },
   { name: "price", description: "Giá (VNĐ), không âm" },
   { name: "active", description: "TRUE/FALSE hoặc 1/0" },

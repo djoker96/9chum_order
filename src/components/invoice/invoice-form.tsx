@@ -20,6 +20,7 @@ import { findProductVariant, getProductConcentrations, getProductNames, getProdu
 import { WAREHOUSE_OPTIONS, type InvoiceFormItem, type InvoiceRecord, type PaymentMethod, type ProductVariant, type ShippingMethod, type Warehouse } from "@/types/domain"
 
 const emptyItem = (): InvoiceFormItem => ({ productId: "", name: "", volume: "", concentration: "", quantity: 1 })
+const EMPTY_CONCENTRATION_OPTION_VALUE = "__EMPTY_CONCENTRATION__"
 
 function parseNonNegativeInteger(value: string): number {
   const parsedValue = Number(value)
@@ -212,11 +213,18 @@ export function InvoiceForm() {
               const names = getProductNames(products)
               const volumes = getProductVolumes(products, item.name)
               const concentrations = getProductConcentrations(products, item.name, item.volume)
+              const concentrationOptions = concentrations.map((concentration) => ({
+                value: concentration || EMPTY_CONCENTRATION_OPTION_VALUE,
+                label: concentration || "Không áp dụng",
+              }))
+              const selectedConcentration = item.productId
+                ? item.concentration || (concentrations.includes("") ? EMPTY_CONCENTRATION_OPTION_VALUE : null)
+                : null
               return (
                 <div className="product-row grid items-end gap-3 border-t py-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_80px_32px]" key={index}>
                   <div className="space-y-2 sm:col-span-2 lg:col-span-1"><Label htmlFor={`product-name-${index}`}>Tên sản phẩm</Label><Select value={item.name || null} onValueChange={(value) => updateItem(index, { name: value ?? "", volume: "", concentration: "", productId: "" })}><SelectTrigger className="h-9 w-full" id={`product-name-${index}`}><SelectValue placeholder="Chọn sản phẩm" /></SelectTrigger><SelectContent>{names.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent></Select></div>
                   <div className="space-y-2"><Label htmlFor={`product-volume-${index}`}>Thể tích</Label><Select value={item.volume || null} onValueChange={(value) => updateItem(index, { volume: value ?? "", concentration: "", productId: "" })} disabled={!item.name}><SelectTrigger className="h-9 w-full" id={`product-volume-${index}`}><SelectValue placeholder="Chọn thể tích" /></SelectTrigger><SelectContent>{volumes.map((volume) => <SelectItem key={volume} value={volume}>{volume}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="space-y-2"><Label htmlFor={`product-concentration-${index}`}>Nồng độ</Label><Select value={item.concentration || null} onValueChange={(value) => { const concentration = value ?? ""; const product = findProductVariant(products, item.name, item.volume, concentration); updateItem(index, { concentration, productId: product?.id ?? "" }) }} disabled={!item.volume}><SelectTrigger className="h-9 w-full" id={`product-concentration-${index}`}><SelectValue placeholder="Chọn nồng độ" /></SelectTrigger><SelectContent>{concentrations.map((concentration) => <SelectItem key={concentration} value={concentration}>{concentration}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2"><Label htmlFor={`product-concentration-${index}`}>Nồng độ</Label><Select value={selectedConcentration} onValueChange={(value) => { const concentration = value === EMPTY_CONCENTRATION_OPTION_VALUE ? "" : value ?? ""; const product = findProductVariant(products, item.name, item.volume, concentration); updateItem(index, { concentration, productId: product?.id ?? "" }) }} disabled={!item.volume}><SelectTrigger className="h-9 w-full" id={`product-concentration-${index}`}><SelectValue placeholder="Chọn nồng độ" /></SelectTrigger><SelectContent>{concentrationOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div>
                   <div className="space-y-2"><Label htmlFor={`product-quantity-${index}`}>Số lượng</Label><Input className="h-9" id={`product-quantity-${index}`} type="number" min={1} value={item.quantity} onChange={(event) => updateItem(index, { quantity: Math.max(1, Number(event.target.value) || 1) })} /></div>
                   <Button className="size-9 p-0" variant="destructive" size="icon" type="button" onClick={() => removeItem(index)} disabled={items.length === 1} aria-label={`Xóa sản phẩm ${index + 1}`}><TrashIcon /></Button>
                 </div>

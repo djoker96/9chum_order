@@ -172,7 +172,7 @@ SP001,Sản phẩm A,10%,30ml,150000,TRUE
 SP002,Sản phẩm B,20%,50ml,250000,FALSE
 ```
 
-Chia sẻ spreadsheet cho `GOOGLE_CLIENT_EMAIL` với quyền **Viewer**. Mã `id` phải duy nhất; `price` là số nguyên VNĐ không âm; `active` nhận `TRUE/FALSE`, `1/0`, `yes/no` hoặc `có/không`. Có thể tải mẫu tại `/templates/products-import.csv` ngay trên trang quản trị.
+Chia sẻ spreadsheet cho `GOOGLE_CLIENT_EMAIL` với quyền **Viewer**. Mã `id` phải duy nhất; `concentration` có thể để trống với sản phẩm không có nồng độ; `price` là số nguyên VNĐ không âm; `active` nhận `TRUE/FALSE`, `1/0`, `yes/no` hoặc `có/không`. Có thể tải mẫu tại `/templates/products-import.csv` ngay trên trang quản trị.
 
 ### Kết nối trong ứng dụng
 

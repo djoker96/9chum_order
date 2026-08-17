@@ -17,6 +17,19 @@ describe("product sync", () => {
     })
   })
 
+  it("keeps products whose concentration is intentionally blank", () => {
+    expect(normalizeProductRows([
+      { id: "Bong_415", product_name: "Bỗng nấu ăn 9Chum", concentration: "", volume: "415 ml", price: "31,000", active: true },
+      { id: "MQH_415", product_name: "Gia vị thảo mộc - Mộc Quế Hương", concentration: "", volume: "415 ml", price: "50,000", active: true },
+    ])).toEqual({
+      rows: [
+        { externalId: "Bong_415", name: "Bỗng nấu ăn 9Chum", concentration: "", volume: "415 ml", price: 31000, isActive: true, sourceOrder: 1 },
+        { externalId: "MQH_415", name: "Gia vị thảo mộc - Mộc Quế Hương", concentration: "", volume: "415 ml", price: 50000, isActive: true, sourceOrder: 2 },
+      ],
+      errors: [],
+    })
+  })
+
   it("reports invalid and duplicate rows without aborting the batch", () => {
     const result = normalizeProductRows([
       ...rows,

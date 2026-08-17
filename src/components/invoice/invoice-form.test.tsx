@@ -63,4 +63,35 @@ describe("InvoiceForm product selectors", () => {
 
     expect(screen.getByTestId("invoice-preview")).toContainHTML("409.000đ")
   })
+
+  it("allows selecting a product that has no concentration", async () => {
+    fetchMock.mockResolvedValueOnce(response({
+      success: true,
+      data: {
+        products: [{
+          id: "bong-415",
+          externalId: "Bong_415",
+          name: "Bỗng nấu ăn 9Chum",
+          volume: "415 ml",
+          concentration: "",
+          price: 31000,
+          isActive: true,
+        }],
+      },
+    }))
+
+    render(<InvoiceForm />)
+
+    const productRow = await waitFor(() => {
+      const row = document.querySelector(".product-row")
+      if (!(row instanceof HTMLElement)) throw new Error("Product row is not rendered yet")
+      return row
+    })
+
+    chooseOption(within(productRow).getByRole("combobox", { name: "Tên sản phẩm" }), "Bỗng nấu ăn 9Chum")
+    chooseOption(within(productRow).getByRole("combobox", { name: "Thể tích" }), "415 ml")
+    chooseOption(within(productRow).getByRole("combobox", { name: "Nồng độ" }), "Không áp dụng")
+
+    expect(screen.getByTestId("invoice-preview")).toContainHTML("31.000đ")
+  })
 })
