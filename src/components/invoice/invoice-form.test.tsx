@@ -94,4 +94,21 @@ describe("InvoiceForm product selectors", () => {
 
     expect(screen.getByTestId("invoice-preview")).toContainHTML("31.000đ")
   })
+
+  it("renders larger, easier-to-tap product selectors and menu options", async () => {
+    render(<InvoiceForm />)
+
+    const productRow = await waitFor(() => {
+      const row = document.querySelector(".product-row")
+      if (!(row instanceof HTMLElement)) throw new Error("Product row is not rendered yet")
+      return row
+    })
+
+    for (const label of ["Tên sản phẩm", "Thể tích", "Nồng độ"]) {
+      expect(within(productRow).getByRole("combobox", { name: label })).toHaveClass("h-11", "text-sm")
+    }
+
+    fireEvent.click(within(productRow).getByRole("combobox", { name: "Tên sản phẩm" }))
+    expect(screen.getAllByRole("option")[0]).toHaveClass("min-h-10", "text-sm")
+  })
 })
