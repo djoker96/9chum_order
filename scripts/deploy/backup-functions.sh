@@ -3,6 +3,29 @@
 # This file is sourced by release.sh and backup.sh. Callers provide compose(),
 # POSTGRES_DB, POSTGRES_MIGRATOR_USER, BACKUP_DIR, SIGNATURE_SQL, fail(), and log().
 
+wait_for_database_ready() {
+  local attempts=40
+  local delay_seconds=3
+  local attempt
+
+  for ((attempt = 1; attempt <= attempts; attempt += 1)); do
+    if compose exec -T db \
+      pg_isready \
+        --username "${POSTGRES_MIGRATOR_USER}" \
+        --dbname "${POSTGRES_DB}" \
+        >/dev/null 2>&1; then
+      return 0
+    fi
+
+    if (( attempt < attempts )); then
+      log "Database is not ready for backup; waiting ${delay_seconds}s (attempt ${attempt}/${attempts})."
+      sleep "${delay_seconds}"
+    fi
+  done
+
+  fail "Database did not become ready before backup."
+}
+
 database_signature() {
   compose exec -T db \
     psql \
@@ -25,6 +48,8 @@ create_verified_backup() {
   local after_signature
   local attempt
   local completed=false
+
+  wait_for_database_ready
 
   timestamp="$(date +'%Y%m%dT%H%M%S%z')"
   target="${BACKUP_DIR}/${timestamp}-${label}.dump"

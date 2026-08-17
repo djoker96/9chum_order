@@ -22,6 +22,7 @@ let temporaryRoots: string[] = []
 interface Harness {
   currentBundleLink: string
   currentShaFile: string
+  dbReadyCounter: string
   env: NodeJS.ProcessEnv
   logFile: string
   releaseScript: string
@@ -105,6 +106,18 @@ if [[ "$arguments" == *' ps --status running --quiet db '* ]]; then
   [[ \${FAKE_DB_RUNNING:-1} == 1 ]] && printf 'fake-db-id\\n'
   exit 0
 fi
+if [[ "$arguments" == *' exec -T db pg_isready '* ]]; then
+  ready_attempt=0
+  if [[ -n \${FAKE_DB_READY_COUNTER:-} && -f \${FAKE_DB_READY_COUNTER} ]]; then
+    ready_attempt="$(<"\${FAKE_DB_READY_COUNTER}")"
+  fi
+  ready_attempt=$((ready_attempt + 1))
+  if [[ -n \${FAKE_DB_READY_COUNTER:-} ]]; then
+    printf '%s\\n' "\${ready_attempt}" >"\${FAKE_DB_READY_COUNTER}"
+  fi
+  if (( ready_attempt <= \${FAKE_DB_NOT_READY_ATTEMPTS:-0} )); then exit 1; fi
+  exit 0
+fi
 if [[ "$arguments" == *' exec -T db psql '* ]]; then
   printf '{"stable":true}\\n'
   exit 0
@@ -136,6 +149,7 @@ function createHarness(overrides: Record<string, string> = {}): Harness {
   const operatorSbin = path.join(root, "operator-sbin")
   const operatorLibexec = path.join(root, "operator-libexec")
   const backupDir = path.join(root, "backups")
+  const dbReadyCounter = path.join(root, "db-ready-attempts")
   const logFile = path.join(root, "commands.log")
 
   mkdirSync(releaseDir, { recursive: true })
@@ -188,6 +202,7 @@ function createHarness(overrides: Record<string, string> = {}): Harness {
   return {
     currentBundleLink: path.join(installDir, "current"),
     currentShaFile,
+    dbReadyCounter,
     logFile,
     releaseScript,
     env: {
@@ -198,6 +213,7 @@ function createHarness(overrides: Record<string, string> = {}): Harness {
       DONHANG_OPERATOR_SBIN_DIR: operatorSbin,
       DONHANG_OPERATOR_LIBEXEC_DIR: operatorLibexec,
       FAKE_LOG: logFile,
+      FAKE_DB_READY_COUNTER: dbReadyCounter,
       FAKE_DB_RUNNING: "1",
       ...overrides,
     },
@@ -241,6 +257,15 @@ describe("release state machine", () => {
     )
     expect(readFileSync(harness.currentShaFile, "utf8").trim()).toBe(releaseSha)
     expect(readlinkSync(harness.currentBundleLink)).toBe(`releases/${releaseSha}`)
+  })
+
+  it("waits for PostgreSQL readiness before creating the pre-migration backup", () => {
+    const harness = createHarness({ FAKE_DB_NOT_READY_ATTEMPTS: "2" })
+    const result = runRelease(harness)
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+    expect(readFileSync(harness.dbReadyCounter, "utf8").trim()).toBe("3")
+    expect(readFileSync(harness.currentShaFile, "utf8").trim()).toBe(releaseSha)
   })
 
   it("aborts before migration when the pre-migration backup fails", () => {
