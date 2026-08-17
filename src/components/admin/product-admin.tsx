@@ -13,7 +13,7 @@ import { formatVnd } from "@/lib/invoice-text"
 import type { ProductVariant } from "@/types/domain"
 
 interface ProductAdminResponse { products: ProductVariant[]; pagination: { total: number } }
-interface SyncResult { created: number; updated: number; unchanged: number; skipped: number; errors: number; details?: Array<{ row: number; message: string }> }
+interface SyncResult { created: number; updated: number; unchanged: number; deactivated: number; skipped: number; errors: number; details?: Array<{ row: number; message: string }> }
 
 export function ProductAdmin() {
   const [result, setResult] = useState<ProductAdminResponse | null>(null)
@@ -49,7 +49,7 @@ export function ProductAdmin() {
       const response = await fetch("/api/admin/products/sync", { method: "POST" })
       const payload = await response.json() as { success: boolean; data?: SyncResult; error?: { message?: string } }
       if (!response.ok || !payload.success || !payload.data) throw new Error(payload.error?.message || "Sync thất bại.")
-      setMessage(`Sync xong: thêm ${payload.data.created}, cập nhật ${payload.data.updated}, không đổi ${payload.data.unchanged}, lỗi ${payload.data.errors}.`)
+      setMessage(`Sync xong: thêm ${payload.data.created}, cập nhật ${payload.data.updated}, vô hiệu hóa ${payload.data.deactivated}, không đổi ${payload.data.unchanged}, lỗi ${payload.data.errors}.`)
       await loadProducts()
     } catch (syncError) {
       setError(syncError instanceof Error ? syncError.message : "Sync thất bại.")

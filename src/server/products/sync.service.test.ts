@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   readRows: vi.fn(),
   normalizeRows: vi.fn(),
   syncRows: vi.fn(),
+  deactivateMissingExternalIds: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -16,7 +17,9 @@ vi.mock("@/lib/prisma", () => ({
     productSyncLog: { create: mocks.createLog, update: mocks.updateLog },
   },
 }))
-vi.mock("@/server/products/product.repository", () => ({ productRepository: {} }))
+vi.mock("@/server/products/product.repository", () => ({
+  productRepository: { deactivateMissingExternalIds: mocks.deactivateMissingExternalIds },
+}))
 vi.mock("@/server/products/google-sheet-config.service", () => ({ getGoogleSheetSourceConfig: mocks.getConfig }))
 vi.mock("@/server/products/google-sheets", () => ({ readGoogleSheetProductRows: mocks.readRows }))
 vi.mock("@/server/products/product-sync", () => ({
@@ -32,7 +35,8 @@ describe("product sync service", () => {
     mocks.getConfig.mockResolvedValue({ spreadsheetId: "sheet-1", sheetName: "Products" })
     mocks.readRows.mockResolvedValue([{ id: "SP001" }])
     mocks.normalizeRows.mockReturnValue({ rows: [{ externalId: "SP001" }], errors: [] })
-    mocks.syncRows.mockResolvedValue({ created: 1, updated: 0, unchanged: 0, skipped: 0, errors: 0, details: [] })
+    mocks.syncRows.mockResolvedValue({ created: 1, updated: 0, unchanged: 0, skipped: 0, errors: 0, deactivated: 0, details: [] })
+    mocks.deactivateMissingExternalIds.mockResolvedValue(2)
   })
 
   it("loads the saved source, syncs rows, and closes the log successfully", async () => {
@@ -40,10 +44,11 @@ describe("product sync service", () => {
 
     expect(mocks.getConfig).toHaveBeenCalledOnce()
     expect(mocks.readRows).toHaveBeenCalledWith({ spreadsheetId: "sheet-1", sheetName: "Products" })
-    expect(result).toMatchObject({ syncLogId: "sync-1", created: 1, errors: 0 })
+    expect(result).toMatchObject({ syncLogId: "sync-1", created: 1, errors: 0, deactivated: 2 })
+    expect(mocks.deactivateMissingExternalIds).toHaveBeenCalledWith(["SP001"], expect.any(Date))
     expect(mocks.updateLog).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "sync-1" },
-      data: expect.objectContaining({ status: "SUCCESS", createdCount: 1, errorCount: 0 }),
+      data: expect.objectContaining({ status: "SUCCESS", createdCount: 1, errorCount: 0, deactivatedCount: 2 }),
     }))
   })
 
@@ -66,8 +71,24 @@ describe("product sync service", () => {
     const result = await syncProductsFromRows([{ id: "SP001" }], "admin-1", "EXCEL")
 
     expect(result).toMatchObject({ skipped: 1, errors: 1 })
+    expect(mocks.deactivateMissingExternalIds).not.toHaveBeenCalled()
     expect(mocks.updateLog).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: "PARTIAL", skippedCount: 1, errorCount: 1 }),
+    }))
+  })
+
+  it("does not deactivate missing products after a partial Google Sheet sync", async () => {
+    mocks.normalizeRows.mockReturnValue({
+      rows: [{ externalId: "SP001" }],
+      errors: [{ row: 3, code: "INVALID_ROW", message: "Dữ liệu không hợp lệ." }],
+    })
+
+    const result = await syncProductsFromGoogleSheets("admin-1")
+
+    expect(result).toMatchObject({ skipped: 1, errors: 1, deactivated: 0 })
+    expect(mocks.deactivateMissingExternalIds).not.toHaveBeenCalled()
+    expect(mocks.updateLog).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: "PARTIAL", deactivatedCount: 0 }),
     }))
   })
 })

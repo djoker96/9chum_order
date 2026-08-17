@@ -146,7 +146,7 @@ Cuối cùng lưu audit/acceptance record, fingerprint deploy key, SHA đang ch�
 
 ## 10. Cấu hình Google Sheets để import sản phẩm
 
-Luồng import là một chiều: admin bấm **Đồng bộ Google Sheets**, backend đọc tab sản phẩm bằng Service Account rồi upsert vào PostgreSQL. Frontend không gọi Google Sheets trực tiếp.
+Luồng import là một chiều: admin bấm **Đồng bộ Google Sheets**, backend đọc tab sản phẩm bằng Service Account rồi upsert vào PostgreSQL. Frontend không gọi Google Sheets trực tiếp. Google Sheets là nguồn dữ liệu chuẩn cho danh mục; thứ tự các dòng dữ liệu (không tính hàng tiêu đề) được lưu để dropdown hóa đơn hiển thị đúng thứ tự trong Sheet.
 
 ### Chuẩn bị Google Cloud
 
@@ -179,8 +179,10 @@ Chia sẻ spreadsheet cho `GOOGLE_CLIENT_EMAIL` với quyền **Viewer**. Mã `i
 1. Đảm bảo migration đã chạy: `npx prisma migrate deploy`.
 2. Đăng nhập tài khoản ADMIN và mở `/admin/products`.
 3. Dán URL spreadsheet, nhập đúng tên tab, bấm **Lưu cấu hình**.
-4. Bấm **Đồng bộ Google Sheets**. Kết quả hiển thị số dòng tạo mới, cập nhật, không đổi và lỗi.
+4. Bấm **Đồng bộ Google Sheets**. Kết quả hiển thị số dòng tạo mới, cập nhật, vô hiệu hóa, không đổi và lỗi.
 
-Nếu nút đồng bộ bị khóa, kiểm tra đủ ba biến credential trên server và quyền Viewer của Service Account. Dòng bị xóa khỏi Sheet không tự động xóa hoặc inactive sản phẩm trong database.
+Chỉ sản phẩm `active` mới xuất hiện và được chọn khi tạo hóa đơn. Một lần đồng bộ Google Sheets hoàn chỉnh (không có dòng lỗi và có ít nhất một dòng hợp lệ) sẽ chuyển các sản phẩm active có `id` không còn trong Sheet sang `Inactive`; dữ liệu không bị xóa để giữ lịch sử hóa đơn. Sheet rỗng hoặc đồng bộ partial không thực hiện bước vô hiệu hóa để tránh làm mất danh mục do cấu hình sai. Import Excel chỉ là luồng fallback/additive-update và không reconcile các ID bị thiếu.
+
+Nếu nút đồng bộ bị khóa, kiểm tra đủ ba biến credential trên server và quyền Viewer của Service Account. Sau lần sync đầu tiên, kiểm tra số lượng `vô hiệu hóa` và danh sách Inactive trong trang quản trị trước khi nghiệm thu dropdown hóa đơn.
 
 Tài liệu tham khảo: [Google Sheets API Node.js quickstart](https://developers.google.com/workspace/sheets/api/quickstart/nodejs), [tạo Service Account](https://cloud.google.com/iam/docs/service-accounts-create), [chia sẻ spreadsheet](https://support.google.com/docs/answer/9331169).

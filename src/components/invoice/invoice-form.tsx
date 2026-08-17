@@ -16,6 +16,7 @@ import { InvoiceActions } from "@/components/invoice/invoice-actions"
 import { InvoicePreview } from "@/components/invoice/invoice-preview"
 import { calculateInvoiceTotals, type DiscountType } from "@/lib/money"
 import { formatVnd, type InvoiceOutputData } from "@/lib/invoice-text"
+import { findProductVariant, getProductConcentrations, getProductNames, getProductVolumes } from "@/lib/product-options"
 import { WAREHOUSE_OPTIONS, type InvoiceFormItem, type InvoiceRecord, type PaymentMethod, type ProductVariant, type ShippingMethod, type Warehouse } from "@/types/domain"
 
 const emptyItem = (): InvoiceFormItem => ({ productId: "", name: "", volume: "", concentration: "", quantity: 1 })
@@ -208,14 +209,14 @@ export function InvoiceForm() {
             {isLoadingProducts && <p className="text-sm text-muted-foreground">Đang tải danh mục sản phẩm...</p>}
             {!isLoadingProducts && products.length === 0 && <Alert variant="destructive"><AlertDescription>Chưa có sản phẩm active. Admin cần đồng bộ dữ liệu trước.</AlertDescription></Alert>}
             {items.map((item, index) => {
-              const names = [...new Set(products.map((product) => product.name))]
-              const volumes = [...new Set(products.filter((product) => product.name === item.name).map((product) => product.volume))]
-              const concentrations = [...new Set(products.filter((product) => product.name === item.name && product.volume === item.volume).map((product) => product.concentration))]
+              const names = getProductNames(products)
+              const volumes = getProductVolumes(products, item.name)
+              const concentrations = getProductConcentrations(products, item.name, item.volume)
               return (
                 <div className="product-row grid items-end gap-3 border-t py-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_80px_32px]" key={index}>
                   <div className="space-y-2 sm:col-span-2 lg:col-span-1"><Label htmlFor={`product-name-${index}`}>Tên sản phẩm</Label><Select value={item.name || null} onValueChange={(value) => updateItem(index, { name: value ?? "", volume: "", concentration: "", productId: "" })}><SelectTrigger className="h-9 w-full" id={`product-name-${index}`}><SelectValue placeholder="Chọn sản phẩm" /></SelectTrigger><SelectContent>{names.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent></Select></div>
                   <div className="space-y-2"><Label htmlFor={`product-volume-${index}`}>Thể tích</Label><Select value={item.volume || null} onValueChange={(value) => updateItem(index, { volume: value ?? "", concentration: "", productId: "" })} disabled={!item.name}><SelectTrigger className="h-9 w-full" id={`product-volume-${index}`}><SelectValue placeholder="Chọn thể tích" /></SelectTrigger><SelectContent>{volumes.map((volume) => <SelectItem key={volume} value={volume}>{volume}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="space-y-2"><Label htmlFor={`product-concentration-${index}`}>Nồng độ</Label><Select value={item.concentration || null} onValueChange={(value) => { const concentration = value ?? ""; const product = products.find((candidate) => candidate.name === item.name && candidate.volume === item.volume && candidate.concentration === concentration); updateItem(index, { concentration, productId: product?.id ?? "" }) }} disabled={!item.volume}><SelectTrigger className="h-9 w-full" id={`product-concentration-${index}`}><SelectValue placeholder="Chọn nồng độ" /></SelectTrigger><SelectContent>{concentrations.map((concentration) => <SelectItem key={concentration} value={concentration}>{concentration}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2"><Label htmlFor={`product-concentration-${index}`}>Nồng độ</Label><Select value={item.concentration || null} onValueChange={(value) => { const concentration = value ?? ""; const product = findProductVariant(products, item.name, item.volume, concentration); updateItem(index, { concentration, productId: product?.id ?? "" }) }} disabled={!item.volume}><SelectTrigger className="h-9 w-full" id={`product-concentration-${index}`}><SelectValue placeholder="Chọn nồng độ" /></SelectTrigger><SelectContent>{concentrations.map((concentration) => <SelectItem key={concentration} value={concentration}>{concentration}</SelectItem>)}</SelectContent></Select></div>
                   <div className="space-y-2"><Label htmlFor={`product-quantity-${index}`}>Số lượng</Label><Input className="h-9" id={`product-quantity-${index}`} type="number" min={1} value={item.quantity} onChange={(event) => updateItem(index, { quantity: Math.max(1, Number(event.target.value) || 1) })} /></div>
                   <Button className="size-9 p-0" variant="destructive" size="icon" type="button" onClick={() => removeItem(index)} disabled={items.length === 1} aria-label={`Xóa sản phẩm ${index + 1}`}><TrashIcon /></Button>
                 </div>

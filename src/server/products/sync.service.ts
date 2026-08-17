@@ -8,12 +8,21 @@ import { Prisma, type SyncSource } from "@prisma/client"
 
 async function runProductSync(
   initialLogId: string,
+  source: SyncSource,
   loadRows: () => Promise<Record<string, unknown>[]>,
 ) {
   try {
     const rawRows = await loadRows()
     const normalized = normalizeProductRows(rawRows)
-    const summary = await syncProductRows(normalized.rows, productRepository)
+    const syncedAt = new Date()
+    const summary = await syncProductRows(normalized.rows, productRepository, syncedAt)
+    const canReconcileMissing = source === "GOOGLE_SHEETS"
+      && normalized.rows.length > 0
+      && normalized.errors.length === 0
+      && summary.errors === 0
+    const deactivated = canReconcileMissing
+      ? await productRepository.deactivateMissingExternalIds(normalized.rows.map((row) => row.externalId), syncedAt)
+      : 0
     const details = [...normalized.errors, ...summary.details]
     const status = details.length === 0 ? "SUCCESS" : "PARTIAL"
     const completedAt = new Date()
@@ -24,6 +33,7 @@ async function runProductSync(
         createdCount: summary.created,
         updatedCount: summary.updated,
         unchangedCount: summary.unchanged,
+        deactivatedCount: deactivated,
         skippedCount: normalized.errors.length,
         errorCount: details.length,
         detailJson: details.length > 0 ? (details as unknown as Prisma.InputJsonValue) : undefined,
@@ -36,6 +46,7 @@ async function runProductSync(
       created: summary.created,
       updated: summary.updated,
       unchanged: summary.unchanged,
+      deactivated,
       skipped: normalized.errors.length,
       errors: details.length,
       completedAt,
@@ -69,13 +80,13 @@ export async function syncProductsFromRows(
   source: SyncSource,
 ) {
   const initialLogId = await createInitialSyncLog(createdById, source)
-  return runProductSync(initialLogId, async () => rawRows)
+  return runProductSync(initialLogId, source, async () => rawRows)
 }
 
 export async function syncProductsFromGoogleSheets(createdById: string) {
   const source = "GOOGLE_SHEETS" as const
   const initialLogId = await createInitialSyncLog(createdById, source)
-  return runProductSync(initialLogId, async () => {
+  return runProductSync(initialLogId, source, async () => {
     const config = await getGoogleSheetSourceConfig()
     if (!config) throw new AppError(503, "GOOGLE_SHEET_ACCESS_DENIED", "Google Sheets chưa được cấu hình.")
     return readGoogleSheetProductRows(config)

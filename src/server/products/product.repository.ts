@@ -10,6 +10,7 @@ function toProductRecord(product: {
   volume: string
   price: unknown
   isActive: boolean
+  sourceOrder: number | null
   lastSyncedAt: Date | null
 }): ProductRecord {
   return {
@@ -20,6 +21,7 @@ function toProductRecord(product: {
     volume: product.volume,
     price: Number(product.price),
     isActive: product.isActive,
+    sourceOrder: product.sourceOrder,
     lastSyncedAt: product.lastSyncedAt,
   }
 }
@@ -32,8 +34,16 @@ const productSelect = {
   volume: true,
   price: true,
   isActive: true,
+  sourceOrder: true,
   lastSyncedAt: true,
 } satisfies Prisma.ProductSelect
+
+const productOrderBy = [
+  { sourceOrder: { sort: "asc", nulls: "last" } },
+  { name: "asc" },
+  { volume: "asc" },
+  { concentration: "asc" },
+] satisfies Prisma.ProductOrderByWithRelationInput[]
 
 export const productRepository: ProductRepository = {
   async findByExternalIds(externalIds) {
@@ -54,6 +64,15 @@ export const productRepository: ProductRepository = {
     const product = await prisma.product.update({ where: { id }, data: input })
     return toProductRecord(product)
   },
+
+  async deactivateMissingExternalIds(externalIds, lastSyncedAt) {
+    if (externalIds.length === 0) return 0
+    const result = await prisma.product.updateMany({
+      where: { isActive: true, externalId: { notIn: externalIds } },
+      data: { isActive: false, lastSyncedAt },
+    })
+    return result.count
+  },
 }
 
 export interface ProductListFilters {
@@ -63,11 +82,9 @@ export interface ProductListFilters {
   pageSize?: number
 }
 
-export async function listProducts(filters: ProductListFilters = {}) {
-  const page = filters.page ?? 1
-  const pageSize = filters.pageSize ?? 50
+function buildProductWhere(filters: Pick<ProductListFilters, "search" | "status"> = {}): Prisma.ProductWhereInput {
   const search = filters.search?.trim()
-  const where = {
+  return {
     ...(filters.status === "ACTIVE" ? { isActive: true } : {}),
     ...(filters.status === "INACTIVE" ? { isActive: false } : {}),
     ...(search
@@ -81,13 +98,20 @@ export async function listProducts(filters: ProductListFilters = {}) {
         }
       : {}),
   }
+}
+
+export async function listProducts(filters: ProductListFilters = {}) {
+  const page = filters.page ?? 1
+  const pageSize = filters.pageSize ?? 50
+  const where = buildProductWhere(filters)
 
   const [products, total] = await Promise.all([
     prisma.product.findMany({
       where,
-      orderBy: [{ name: "asc" }, { volume: "asc" }, { concentration: "asc" }],
+      orderBy: productOrderBy,
       skip: (page - 1) * pageSize,
       take: pageSize,
+      select: productSelect,
     }),
     prisma.product.count({ where }),
   ])
@@ -95,5 +119,23 @@ export async function listProducts(filters: ProductListFilters = {}) {
   return {
     products: products.map(toProductRecord),
     pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+  }
+}
+
+export async function listActiveProducts(filters: Pick<ProductListFilters, "search"> = {}) {
+  const products = await prisma.product.findMany({
+    where: { ...buildProductWhere(filters), isActive: true },
+    orderBy: productOrderBy,
+    select: productSelect,
+  })
+
+  return {
+    products: products.map(toProductRecord),
+    pagination: {
+      page: 1,
+      pageSize: products.length,
+      total: products.length,
+      totalPages: products.length > 0 ? 1 : 0,
+    },
   }
 }

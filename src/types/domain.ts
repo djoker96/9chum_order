@@ -15,6 +15,7 @@ export interface ProductVariant {
   concentration: string
   price: number
   isActive: boolean
+  sourceOrder?: number | null
 }
 
 export interface InvoiceRecord extends InvoiceOutputData {

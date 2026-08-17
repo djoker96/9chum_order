@@ -7,10 +7,18 @@ export interface ProductRow {
   volume: string
   price: number
   isActive: boolean
+  sourceOrder: number
 }
 
-export interface ProductRecord extends ProductRow {
+export interface ProductRecord {
   id: string
+  externalId: string
+  name: string
+  concentration: string
+  volume: string
+  price: number
+  isActive: boolean
+  sourceOrder: number | null
   lastSyncedAt?: Date | null
 }
 
@@ -33,6 +41,7 @@ export interface ProductRepository {
   findByExternalIds(externalIds: string[]): Promise<ProductRecord[]>
   create(input: ProductWriteInput): Promise<ProductRecord>
   update(id: string, input: ProductWriteInput): Promise<ProductRecord>
+  deactivateMissingExternalIds(externalIds: string[], lastSyncedAt: Date): Promise<number>
 }
 
 export interface ProductSyncSummary {
@@ -41,6 +50,7 @@ export interface ProductSyncSummary {
   unchanged: number
   skipped: number
   errors: number
+  deactivated: number
   details: ProductSyncRowError[]
 }
 
@@ -73,7 +83,7 @@ function parseBoolean(value: unknown): boolean | null {
   return null
 }
 
-function normalizeRow(row: Record<string, unknown>, rowNumber: number): { row: ProductRow } | { error: ProductSyncRowError } {
+function normalizeRow(row: Record<string, unknown>, rowNumber: number, sourceOrder: number): { row: ProductRow } | { error: ProductSyncRowError } {
   const values = Object.entries(row).reduce<Record<string, unknown>>(
     (result, [key, value]) => ({ ...result, [normalizedKey(key)]: value }),
     {},
@@ -96,7 +106,7 @@ function normalizeRow(row: Record<string, unknown>, rowNumber: number): { row: P
     }
   }
 
-  return { row: { externalId, name, concentration, volume, price, isActive } }
+  return { row: { externalId, name, concentration, volume, price, isActive, sourceOrder } }
 }
 
 export function normalizeProductRows(rawRows: Record<string, unknown>[]): NormalizedProductRows {
@@ -106,7 +116,7 @@ export function normalizeProductRows(rawRows: Record<string, unknown>[]): Normal
 
   rawRows.forEach((rawRow, index) => {
     const rowNumber = index + 2
-    const normalized = normalizeRow(rawRow, rowNumber)
+    const normalized = normalizeRow(rawRow, rowNumber, index + 1)
     if ("error" in normalized) {
       errors.push(normalized.error)
       return
@@ -134,6 +144,7 @@ function hasChanged(existing: ProductRecord, incoming: ProductRow): boolean {
     || existing.volume !== incoming.volume
     || existing.price !== incoming.price
     || existing.isActive !== incoming.isActive
+    || existing.sourceOrder !== incoming.sourceOrder
 }
 
 export async function syncProductRows(
@@ -147,6 +158,7 @@ export async function syncProductRows(
     unchanged: 0,
     skipped: 0,
     errors: 0,
+    deactivated: 0,
     details: [],
   }
 

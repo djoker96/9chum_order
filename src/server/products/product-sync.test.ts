@@ -10,8 +10,8 @@ describe("product sync", () => {
   it("normalizes valid sheet rows into product master data", () => {
     expect(normalizeProductRows(rows)).toEqual({
       rows: [
-        { externalId: "SP001", name: "Sản phẩm A", concentration: "10%", volume: "30ml", price: 150000, isActive: true },
-        { externalId: "SP002", name: "Sản phẩm B", concentration: "20%", volume: "50ml", price: 250000, isActive: false },
+        { externalId: "SP001", name: "Sản phẩm A", concentration: "10%", volume: "30ml", price: 150000, isActive: true, sourceOrder: 1 },
+        { externalId: "SP002", name: "Sản phẩm B", concentration: "20%", volume: "50ml", price: 250000, isActive: false, sourceOrder: 2 },
       ],
       errors: [],
     })
@@ -40,9 +40,9 @@ describe("product sync", () => {
   })
 
   it("creates, updates, and counts unchanged products", async () => {
-    const stored = new Map<string, { id: string; externalId: string; name: string; concentration: string; volume: string; price: number; isActive: boolean }>([
-      ["SP001", { id: "product-1", externalId: "SP001", name: "Old name", concentration: "10%", volume: "30ml", price: 100000, isActive: true }],
-      ["SP003", { id: "product-3", externalId: "SP003", name: "Same", concentration: "30%", volume: "30ml", price: 300000, isActive: true }],
+    const stored = new Map<string, { id: string; externalId: string; name: string; concentration: string; volume: string; price: number; isActive: boolean; sourceOrder: number | null }>([
+      ["SP001", { id: "product-1", externalId: "SP001", name: "Old name", concentration: "10%", volume: "30ml", price: 100000, isActive: true, sourceOrder: 1 }],
+      ["SP003", { id: "product-3", externalId: "SP003", name: "Same", concentration: "30%", volume: "30ml", price: 300000, isActive: true, sourceOrder: 2 }],
     ])
     let bulkLookupCount = 0
     const repository: ProductRepository = {
@@ -65,13 +65,14 @@ describe("product sync", () => {
         stored.set(product.externalId, product)
         return product
       },
+      deactivateMissingExternalIds: async () => 0,
     }
 
     const summary = await syncProductRows(
       [
-        { externalId: "SP001", name: "New name", concentration: "10%", volume: "30ml", price: 150000, isActive: true },
-        { externalId: "SP003", name: "Same", concentration: "30%", volume: "30ml", price: 300000, isActive: true },
-        { externalId: "SP004", name: "New", concentration: "40%", volume: "10ml", price: 400000, isActive: true },
+        { externalId: "SP001", name: "New name", concentration: "10%", volume: "30ml", price: 150000, isActive: true, sourceOrder: 1 },
+        { externalId: "SP003", name: "Same", concentration: "30%", volume: "30ml", price: 300000, isActive: true, sourceOrder: 2 },
+        { externalId: "SP004", name: "New", concentration: "40%", volume: "10ml", price: 400000, isActive: true, sourceOrder: 3 },
       ],
       repository,
     )
@@ -90,11 +91,12 @@ describe("product sync", () => {
         return { id: "product-6", ...input }
       },
       update: async (id, input) => ({ id, ...input }),
+      deactivateMissingExternalIds: async () => 0,
     }
 
     const summary = await syncProductRows([
-      { externalId: "SP005", name: "Fails", concentration: "10%", volume: "30ml", price: 150000, isActive: true },
-      { externalId: "SP006", name: "Works", concentration: "10%", volume: "30ml", price: 150000, isActive: true },
+      { externalId: "SP005", name: "Fails", concentration: "10%", volume: "30ml", price: 150000, isActive: true, sourceOrder: 1 },
+      { externalId: "SP006", name: "Works", concentration: "10%", volume: "30ml", price: 150000, isActive: true, sourceOrder: 2 },
     ], repository)
 
     expect(summary).toMatchObject({ created: 1, errors: 1 })

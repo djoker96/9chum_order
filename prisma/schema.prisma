@@ -88,6 +88,7 @@ model Product {
   volume        String
   price         Decimal   @db.Decimal(14, 0)
   isActive      Boolean   @default(true) @map("is_active")
+  sourceOrder   Int?      @map("source_order")
   lastSyncedAt  DateTime? @map("last_synced_at")
 
   invoiceItems InvoiceItem[]
@@ -97,6 +98,7 @@ model Product {
 
   @@index([name])
   @@index([isActive])
+  @@index([sourceOrder])
   @@index([name, volume, concentration])
   @@map("products")
 }
@@ -162,6 +164,7 @@ model ProductSyncLog {
   createdCount   Int        @default(0) @map("created_count")
   updatedCount   Int        @default(0) @map("updated_count")
   unchangedCount Int        @default(0) @map("unchanged_count")
+  deactivatedCount Int       @default(0) @map("deactivated_count")
   skippedCount   Int        @default(0) @map("skipped_count")
   errorCount     Int        @default(0) @map("error_count")
   errorMessage   String?    @map("error_message")

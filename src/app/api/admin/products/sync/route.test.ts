@@ -24,6 +24,7 @@ describe("POST /api/admin/products/sync", () => {
       created: 1,
       updated: 2,
       unchanged: 3,
+      deactivated: 0,
       skipped: 0,
       errors: 0,
       completedAt: new Date("2026-08-10T00:00:00.000Z"),
