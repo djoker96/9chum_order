@@ -39,6 +39,7 @@ export function getInvoiceCaptureOptions(node: HTMLElement): InvoiceCaptureOptio
     pixelRatio: INVOICE_EXPORT_PIXEL_RATIO,
     style: {
       height: `${height}px`,
+      margin: "0",
       width: `${width}px`,
     },
     width,
