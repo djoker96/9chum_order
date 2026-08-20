@@ -175,6 +175,10 @@ function invoiceItemData(item: InvoiceDraftItem, productId: string | null = item
   }
 }
 
+function historicalItemReference(invoiceItemId: string): string {
+  return `invoice-item:${invoiceItemId}`
+}
+
 export async function createInvoice(input: CreateInvoiceInput, createdById: string) {
   const productIds = [...new Set(input.items.map((item) => item.productId))]
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
@@ -207,9 +211,9 @@ export async function updateInvoice(id: string, input: UpdateInvoiceInput) {
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
   const productsById = new Map(products.map((product) => [product.id, productFromDatabase(product)]))
   for (const item of existingInvoice.items) {
-    const productId = item.productId ?? item.id
-    productsById.set(productId, {
-      id: productId,
+    const productReference = item.productId ?? historicalItemReference(item.id)
+    productsById.set(productReference, {
+      id: productReference,
       name: item.productName,
       volume: item.volume,
       concentration: item.concentration,
@@ -219,17 +223,19 @@ export async function updateInvoice(id: string, input: UpdateInvoiceInput) {
   }
   const draft = resolveInvoiceDraft({
     ...input,
-    items: input.items.map((item) => ({ productId: item.productId ?? item.invoiceItemId!, quantity: item.quantity })),
+    items: input.items.map((item) => ({ productId: item.productId ?? historicalItemReference(item.invoiceItemId!), quantity: item.quantity })),
   }, [...productsById.values()])
-  const deletedProductReferences = new Set(existingInvoice.items.filter((item) => !item.productId).map((item) => item.id))
+  const historicalItemIds = input.items.flatMap((item) => item.invoiceItemId ? [item.invoiceItemId] : [])
+  const itemWrites = draft.items.map((item, index) => ({ item, invoiceItemId: input.items[index]?.invoiceItemId }))
 
   const updated = await prisma.invoice.update({
     where: { id },
     data: {
       ...invoiceDataFromDraft(draft),
       items: {
-        deleteMany: {},
-        create: draft.items.map((item) => invoiceItemData(item, deletedProductReferences.has(item.productId) ? null : item.productId)),
+        deleteMany: historicalItemIds.length > 0 ? { id: { notIn: historicalItemIds } } : {},
+        update: itemWrites.flatMap(({ item, invoiceItemId }) => invoiceItemId ? [{ where: { id: invoiceItemId }, data: invoiceItemData(item, null) }] : []),
+        create: itemWrites.flatMap(({ item, invoiceItemId }) => invoiceItemId ? [] : [invoiceItemData(item)]),
       },
     },
     include: { items: true, createdBy: { select: { id: true, name: true } } },

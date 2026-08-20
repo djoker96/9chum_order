@@ -169,5 +169,7 @@ describe("InvoiceForm product selectors", () => {
     expect(await screen.findByText("Đã cập nhật")).toBeVisible()
     fireEvent.change(screen.getByLabelText("Số điện thoại"), { target: { value: "0987654321" } })
     expect(screen.queryByText("Đã cập nhật")).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Lưu thay đổi" }))
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url, options]) => url === "/api/invoices/invoice-1" && options?.method === "PATCH")).toHaveLength(2))
   })
 })

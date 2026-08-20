@@ -185,11 +185,12 @@ describe("updateInvoice", () => {
         subtotal: 380000,
         total: 380000,
         items: {
-          deleteMany: {},
-          create: [
-            expect.objectContaining({ productId: "product-1", productName: "Sản phẩm A", unitPrice: 150000, lineTotal: 300000 }),
-            expect.objectContaining({ productId: null, productName: "Sản phẩm đã xóa", unitPrice: 80000, lineTotal: 80000 }),
-          ],
+          deleteMany: { id: { notIn: ["item-2"] } },
+          update: [{
+            where: { id: "item-2" },
+            data: expect.objectContaining({ productId: null, productName: "Sản phẩm đã xóa", unitPrice: 80000, lineTotal: 80000 }),
+          }],
+          create: [expect.objectContaining({ productId: "product-1", productName: "Sản phẩm A", unitPrice: 150000, lineTotal: 300000 })],
         },
       }),
     }))

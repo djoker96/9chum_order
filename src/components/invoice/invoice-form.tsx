@@ -72,14 +72,14 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
           if (!invoiceResponse.ok || !invoicePayload.success || !invoicePayload.data?.invoice) throw new Error(invoicePayload.error?.message || "Không thể tải hóa đơn.")
           const invoice = invoicePayload.data.invoice
           for (const item of invoice.items) {
-            const productId = item.productId ?? item.id
-            const snapshot = { id: productId, externalId: productId, name: item.productName, volume: item.volume, concentration: item.concentration, price: item.unitPrice, isActive: false }
-            const productIndex = nextProducts.findIndex((product) => product.id === productId)
+            const productSelectionId = item.productId ?? `invoice-item:${item.id}`
+            const snapshot = { id: productSelectionId, externalId: productSelectionId, name: item.productName, volume: item.volume, concentration: item.concentration, price: item.unitPrice, isActive: false }
+            const productIndex = nextProducts.findIndex((product) => product.id === productSelectionId)
             if (productIndex === -1) nextProducts.push(snapshot)
             else nextProducts[productIndex] = { ...nextProducts[productIndex], ...snapshot }
           }
           if (isMounted) {
-            setItems(invoice.items.map((item) => ({ productId: item.productId ?? item.id, invoiceItemId: item.productId ? undefined : item.id, name: item.productName, volume: item.volume, concentration: item.concentration, quantity: item.quantity })))
+            setItems(invoice.items.map((item) => ({ productId: item.productId ?? `invoice-item:${item.id}`, invoiceItemId: item.productId ? undefined : item.id, name: item.productName, volume: item.volume, concentration: item.concentration, quantity: item.quantity })))
             setCustomerName(invoice.customerName)
             setPhone(invoice.phone)
             setAddress(invoice.address)
