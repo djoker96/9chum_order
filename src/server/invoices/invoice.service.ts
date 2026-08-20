@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { calculateInvoiceTotals, type DiscountType } from "@/lib/money"
 import { formatInvoiceNumber, formatInvoiceNumberDate } from "@/lib/invoice-number"
 import { AppError } from "@/server/http/api"
-import type { CreateInvoiceInput } from "@/server/validators/invoice.schema"
+import type { CreateInvoiceInput, UpdateInvoiceInput } from "@/server/validators/invoice.schema"
 import type { Warehouse } from "@/types/domain"
 
 export interface InvoiceProduct {
@@ -141,6 +141,40 @@ function productFromDatabase(product: {
   return { ...product, price: Number(product.price) }
 }
 
+function invoiceDataFromDraft(draft: ResolvedInvoiceDraft) {
+  return {
+    customerName: draft.customerName,
+    phone: draft.phone,
+    address: draft.address,
+    warehouse: draft.warehouse,
+    paymentMethod: draft.paymentMethod,
+    shippingMethod: draft.shippingMethod,
+    shippingFee: draft.shippingFee,
+    subtotal: draft.subtotal,
+    discountType: draft.discountType,
+    discountValue: draft.discountValue,
+    discountAmount: draft.discountAmount,
+    total: draft.total,
+    note: draft.note,
+    issueInvoice: draft.issueInvoice,
+    companyName: draft.companyName,
+    invoiceAddress: draft.invoiceAddress,
+    invoiceEmail: draft.invoiceEmail,
+  }
+}
+
+function invoiceItemData(item: InvoiceDraftItem, productId: string | null = item.productId) {
+  return {
+    productId,
+    productName: item.productName,
+    volume: item.volume,
+    concentration: item.concentration,
+    unitPrice: item.unitPrice,
+    quantity: item.quantity,
+    lineTotal: item.lineTotal,
+  }
+}
+
 export async function createInvoice(input: CreateInvoiceInput, createdById: string) {
   const productIds = [...new Set(input.items.map((item) => item.productId))]
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
@@ -151,89 +185,51 @@ export async function createInvoice(input: CreateInvoiceInput, createdById: stri
     const invoiceNumber = await nextInvoiceNumber(tx, createdAt)
     return tx.invoice.create({
       data: {
+        ...invoiceDataFromDraft(draft),
         invoiceNumber,
-        customerName: draft.customerName,
-        phone: draft.phone,
-        address: draft.address,
-        warehouse: draft.warehouse,
-        paymentMethod: draft.paymentMethod,
-        shippingMethod: draft.shippingMethod,
-        shippingFee: draft.shippingFee,
-        subtotal: draft.subtotal,
-        discountType: draft.discountType,
-        discountValue: draft.discountValue,
-        discountAmount: draft.discountAmount,
-        total: draft.total,
-        note: draft.note,
-        issueInvoice: draft.issueInvoice,
-        companyName: draft.companyName,
-        invoiceAddress: draft.invoiceAddress,
-        invoiceEmail: draft.invoiceEmail,
         createdById,
         createdAt,
-        items: {
-          create: draft.items.map((item) => ({
-            productId: item.productId,
-            productName: item.productName,
-            volume: item.volume,
-            concentration: item.concentration,
-            unitPrice: item.unitPrice,
-            quantity: item.quantity,
-            lineTotal: item.lineTotal,
-          })),
-        },
+        items: { create: draft.items.map((item) => invoiceItemData(item)) },
       },
       include: { items: true, createdBy: { select: { id: true, name: true } } },
     })
   })
 }
 
-export async function updateInvoice(id: string, input: CreateInvoiceInput) {
+export async function updateInvoice(id: string, input: UpdateInvoiceInput) {
   const existingInvoice = await prisma.invoice.findUnique({
     where: { id },
-    select: { items: { select: { productId: true } } },
+    select: { items: { select: { id: true, productId: true, productName: true, volume: true, concentration: true, unitPrice: true } } },
   })
   if (!existingInvoice) throw new AppError(404, "INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn.")
 
-  const existingProductIds = new Set(existingInvoice.items.map((item) => item.productId).filter((productId): productId is string => Boolean(productId)))
-  const productIds = [...new Set(input.items.map((item) => item.productId))]
+  const productIds = [...new Set(input.items.flatMap((item) => item.productId ? [item.productId] : []))]
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
-  const draft = resolveInvoiceDraft(input, products.map((product) => ({
-    ...productFromDatabase(product),
-    isActive: product.isActive || existingProductIds.has(product.id),
-  })))
+  const productsById = new Map(products.map((product) => [product.id, productFromDatabase(product)]))
+  for (const item of existingInvoice.items) {
+    const productId = item.productId ?? item.id
+    productsById.set(productId, {
+      id: productId,
+      name: item.productName,
+      volume: item.volume,
+      concentration: item.concentration,
+      price: Number(item.unitPrice),
+      isActive: true,
+    })
+  }
+  const draft = resolveInvoiceDraft({
+    ...input,
+    items: input.items.map((item) => ({ productId: item.productId ?? item.invoiceItemId!, quantity: item.quantity })),
+  }, [...productsById.values()])
+  const deletedProductReferences = new Set(existingInvoice.items.filter((item) => !item.productId).map((item) => item.id))
 
   const updated = await prisma.invoice.update({
     where: { id },
     data: {
-      customerName: draft.customerName,
-      phone: draft.phone,
-      address: draft.address,
-      warehouse: draft.warehouse,
-      paymentMethod: draft.paymentMethod,
-      shippingMethod: draft.shippingMethod,
-      shippingFee: draft.shippingFee,
-      subtotal: draft.subtotal,
-      discountType: draft.discountType,
-      discountValue: draft.discountValue,
-      discountAmount: draft.discountAmount,
-      total: draft.total,
-      note: draft.note,
-      issueInvoice: draft.issueInvoice,
-      companyName: draft.companyName,
-      invoiceAddress: draft.invoiceAddress,
-      invoiceEmail: draft.invoiceEmail,
+      ...invoiceDataFromDraft(draft),
       items: {
         deleteMany: {},
-        create: draft.items.map((item) => ({
-          productId: item.productId,
-          productName: item.productName,
-          volume: item.volume,
-          concentration: item.concentration,
-          unitPrice: item.unitPrice,
-          quantity: item.quantity,
-          lineTotal: item.lineTotal,
-        })),
+        create: draft.items.map((item) => invoiceItemData(item, deletedProductReferences.has(item.productId) ? null : item.productId)),
       },
     },
     include: { items: true, createdBy: { select: { id: true, name: true } } },

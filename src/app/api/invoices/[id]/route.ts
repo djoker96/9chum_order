@@ -4,7 +4,7 @@ import { updateInvoice } from "@/server/invoices/invoice.service"
 import { requireAdmin, requireUser } from "@/server/auth/session"
 import { errorResponse, successResponse } from "@/server/http/api"
 import { assertApiRateLimit, assertSameOrigin } from "@/server/http/security"
-import { createInvoiceSchema } from "@/server/validators/invoice.schema"
+import { updateInvoiceSchema } from "@/server/validators/invoice.schema"
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -23,7 +23,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     assertApiRateLimit(request, "invoice-update", 30)
     await requireAdmin()
     const { id } = await context.params
-    const input = createInvoiceSchema.parse(await request.json())
+    const input = updateInvoiceSchema.parse(await request.json())
     return successResponse({ invoice: await updateInvoice(id, input) })
   } catch (error) {
     return errorResponse(error)

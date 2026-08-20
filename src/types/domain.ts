@@ -24,11 +24,12 @@ export interface InvoiceRecord extends Omit<InvoiceOutputData, "items"> {
   status: "CONFIRMED" | "CANCELLED"
   createdAt: string
   updatedAt?: string
-  items: Array<InvoiceOutputItem & { productId: string | null }>
+  items: Array<InvoiceOutputItem & { id: string; productId: string | null }>
 }
 
 export interface InvoiceFormItem {
   productId: string
+  invoiceItemId?: string
   name: string
   volume: string
   concentration: string

@@ -50,6 +50,7 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
   const [invoiceInfo, setInvoiceInfo] = useState({ companyName: "", address: "", email: "" })
   const [invoiceNumber, setInvoiceNumber] = useState<string>()
   const [createdInvoice, setCreatedInvoice] = useState<InvoiceRecord | null>(null)
+  const [savedPayload, setSavedPayload] = useState<string | null>(null)
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -70,15 +71,15 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
           const invoicePayload = await invoiceResponse.json() as { success: boolean; data?: { invoice: InvoiceRecord }; error?: { message?: string } }
           if (!invoiceResponse.ok || !invoicePayload.success || !invoicePayload.data?.invoice) throw new Error(invoicePayload.error?.message || "Không thể tải hóa đơn.")
           const invoice = invoicePayload.data.invoice
-          const productIds = new Set(nextProducts.map((product) => product.id))
           for (const item of invoice.items) {
-            if (item.productId && !productIds.has(item.productId)) {
-              nextProducts.push({ id: item.productId, externalId: item.productId, name: item.productName, volume: item.volume, concentration: item.concentration, price: item.unitPrice, isActive: false })
-              productIds.add(item.productId)
-            }
+            const productId = item.productId ?? item.id
+            const snapshot = { id: productId, externalId: productId, name: item.productName, volume: item.volume, concentration: item.concentration, price: item.unitPrice, isActive: false }
+            const productIndex = nextProducts.findIndex((product) => product.id === productId)
+            if (productIndex === -1) nextProducts.push(snapshot)
+            else nextProducts[productIndex] = { ...nextProducts[productIndex], ...snapshot }
           }
           if (isMounted) {
-            setItems(invoice.items.map((item) => ({ productId: item.productId ?? "", name: item.productName, volume: item.volume, concentration: item.concentration, quantity: item.quantity })))
+            setItems(invoice.items.map((item) => ({ productId: item.productId ?? item.id, invoiceItemId: item.productId ? undefined : item.id, name: item.productName, volume: item.volume, concentration: item.concentration, quantity: item.quantity })))
             setCustomerName(invoice.customerName)
             setPhone(invoice.phone)
             setAddress(invoice.address)
@@ -151,6 +152,22 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
     }
   }, [address, customerName, discountType, discountValue, invoiceInfo, invoiceNumber, issueInvoice, items, note, paymentMethod, phone, products, shippingFee, shippingMethod, warehouse])
 
+  const serializedInvoicePayload = JSON.stringify({
+    customerName,
+    phone,
+    address,
+    warehouse: warehouse || undefined,
+    items: items.map(({ productId, invoiceItemId, quantity }) => invoiceItemId ? { invoiceItemId, quantity } : { productId, quantity }),
+    paymentMethod,
+    shippingMethod,
+    shippingFee,
+    discountType,
+    discountValue,
+    note: note || undefined,
+    issueInvoice,
+    invoiceInfo: issueInvoice ? invoiceInfo : undefined,
+  })
+
   function updateItem(index: number, changes: Partial<InvoiceFormItem>): void {
     setItems((currentItems) => currentItems.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item))
     setCreatedInvoice(null)
@@ -178,25 +195,12 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
       const response = await fetch(invoiceId ? `/api/invoices/${invoiceId}` : "/api/invoices", {
         method: invoiceId ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          customerName,
-          phone,
-          address,
-          warehouse: warehouse || undefined,
-          items: items.map(({ productId, quantity }) => ({ productId, quantity })),
-          paymentMethod,
-          shippingMethod,
-          shippingFee,
-          discountType,
-          discountValue,
-          note: note || undefined,
-          issueInvoice,
-          invoiceInfo: issueInvoice ? invoiceInfo : undefined,
-        }),
+        body: serializedInvoicePayload,
       })
       const payload = await response.json() as { success: boolean; data?: { invoice: InvoiceRecord }; error?: { message?: string } }
       if (!response.ok || !payload.success || !payload.data?.invoice) throw new Error(payload.error?.message || (invoiceId ? "Không thể cập nhật hóa đơn." : "Không thể tạo hóa đơn."))
       setCreatedInvoice(payload.data.invoice)
+      setSavedPayload(serializedInvoicePayload)
       setInvoiceNumber(payload.data.invoice.invoiceNumber)
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : (invoiceId ? "Không thể cập nhật hóa đơn." : "Không thể tạo hóa đơn."))
@@ -221,10 +225,12 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
     setInvoiceInfo({ companyName: "", address: "", email: "" })
     setInvoiceNumber(undefined)
     setCreatedInvoice(null)
+    setSavedPayload(null)
     setError(null)
   }
 
-  const displayedInvoice = invoiceId ? previewInvoice : createdInvoice ?? previewInvoice
+  const isSaved = Boolean(createdInvoice && savedPayload === serializedInvoicePayload)
+  const displayedInvoice = invoiceId ? previewInvoice : isSaved ? createdInvoice! : { ...previewInvoice, invoiceNumber: undefined }
 
   return (
     <main className="min-h-svh bg-muted/30 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
@@ -263,9 +269,9 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
                 : null
               return (
                 <div className="product-row grid items-end gap-3 border-t py-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_80px_32px]" key={index}>
-                  <div className="space-y-2 sm:col-span-2 lg:col-span-1"><Label htmlFor={`product-name-${index}`}>Tên sản phẩm</Label><Select value={item.name || null} onValueChange={(value) => updateItem(index, { name: value ?? "", volume: "", concentration: "", productId: "" })}><SelectTrigger className="h-11 w-full text-sm" id={`product-name-${index}`}><SelectValue placeholder="Chọn sản phẩm" /></SelectTrigger><SelectContent>{names.map((name) => <SelectItem className="min-h-10 text-sm" key={name} value={name}>{name}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="space-y-2"><Label htmlFor={`product-volume-${index}`}>Thể tích</Label><Select value={item.volume || null} onValueChange={(value) => updateItem(index, { volume: value ?? "", concentration: "", productId: "" })} disabled={!item.name}><SelectTrigger className="h-11 w-full text-sm" id={`product-volume-${index}`}><SelectValue placeholder="Chọn thể tích" /></SelectTrigger><SelectContent>{volumes.map((volume) => <SelectItem className="min-h-10 text-sm" key={volume} value={volume}>{volume}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="space-y-2"><Label htmlFor={`product-concentration-${index}`}>Nồng độ</Label><Select value={selectedConcentration} onValueChange={(value) => { const concentration = value === EMPTY_CONCENTRATION_OPTION_VALUE ? "" : value ?? ""; const product = findProductVariant(products, item.name, item.volume, concentration); updateItem(index, { concentration, productId: product?.id ?? "" }) }} disabled={!item.volume}><SelectTrigger className="h-11 w-full text-sm" id={`product-concentration-${index}`}><SelectValue placeholder="Chọn nồng độ" /></SelectTrigger><SelectContent>{concentrationOptions.map((option) => <SelectItem className="min-h-10 text-sm" key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2 sm:col-span-2 lg:col-span-1"><Label htmlFor={`product-name-${index}`}>Tên sản phẩm</Label><Select value={item.name || null} onValueChange={(value) => updateItem(index, { name: value ?? "", volume: "", concentration: "", productId: "", invoiceItemId: undefined })}><SelectTrigger className="h-11 w-full text-sm" id={`product-name-${index}`}><SelectValue placeholder="Chọn sản phẩm" /></SelectTrigger><SelectContent>{names.map((name) => <SelectItem className="min-h-10 text-sm" key={name} value={name}>{name}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2"><Label htmlFor={`product-volume-${index}`}>Thể tích</Label><Select value={item.volume || null} onValueChange={(value) => updateItem(index, { volume: value ?? "", concentration: "", productId: "", invoiceItemId: undefined })} disabled={!item.name}><SelectTrigger className="h-11 w-full text-sm" id={`product-volume-${index}`}><SelectValue placeholder="Chọn thể tích" /></SelectTrigger><SelectContent>{volumes.map((volume) => <SelectItem className="min-h-10 text-sm" key={volume} value={volume}>{volume}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2"><Label htmlFor={`product-concentration-${index}`}>Nồng độ</Label><Select value={selectedConcentration} onValueChange={(value) => { const concentration = value === EMPTY_CONCENTRATION_OPTION_VALUE ? "" : value ?? ""; const product = findProductVariant(products, item.name, item.volume, concentration); updateItem(index, { concentration, productId: product?.id ?? "", invoiceItemId: undefined }) }} disabled={!item.volume}><SelectTrigger className="h-11 w-full text-sm" id={`product-concentration-${index}`}><SelectValue placeholder="Chọn nồng độ" /></SelectTrigger><SelectContent>{concentrationOptions.map((option) => <SelectItem className="min-h-10 text-sm" key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div>
                   <div className="space-y-2"><Label htmlFor={`product-quantity-${index}`}>Số lượng</Label><Input className="h-9" id={`product-quantity-${index}`} type="number" min={1} value={item.quantity} onChange={(event) => updateItem(index, { quantity: Math.max(1, Number(event.target.value) || 1) })} /></div>
                   <Button className="size-9 p-0" variant="destructive" size="icon" type="button" onClick={() => removeItem(index)} disabled={items.length === 1} aria-label={`Xóa sản phẩm ${index + 1}`}><TrashIcon /></Button>
                 </div>
@@ -313,11 +319,11 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
             <fieldset className="space-y-3 rounded-lg border p-4"><legend className="px-1 text-sm font-medium">Xuất hóa đơn</legend><RadioGroup className="flex flex-wrap gap-x-5 gap-y-3" value={issueInvoice ? "YES" : "NO"} onValueChange={(value) => setIssueInvoice(value === "YES")}><label className="flex items-center gap-2 text-sm"><RadioGroupItem value="NO" /><span>Không</span></label><label className="flex items-center gap-2 text-sm"><RadioGroupItem value="YES" /><span>Có</span></label></RadioGroup>{issueInvoice && <div className="mt-3 grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="company-name">Tên đơn vị</Label><Input className="h-9" id="company-name" value={invoiceInfo.companyName} onChange={(event) => setInvoiceInfo((current) => ({ ...current, companyName: event.target.value }))} /></div><div className="space-y-2"><Label htmlFor="invoice-address">Địa chỉ xuất hóa đơn</Label><Input className="h-9" id="invoice-address" value={invoiceInfo.address} onChange={(event) => setInvoiceInfo((current) => ({ ...current, address: event.target.value }))} /></div><div className="space-y-2 sm:col-span-2"><Label htmlFor="invoice-email">Email xuất hóa đơn</Label><Input className="h-9" id="invoice-email" type="email" value={invoiceInfo.email} onChange={(event) => setInvoiceInfo((current) => ({ ...current, email: event.target.value }))} /></div></div>}</fieldset>
 
             {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-            <div className="flex flex-wrap items-center gap-2"><Button className="h-10" type="button" onClick={() => void submitInvoice()} disabled={isSubmitting || isLoadingProducts}>{isSubmitting ? "Đang lưu..." : invoiceId ? "Lưu thay đổi" : "Tạo hóa đơn"}</Button>{createdInvoice && !invoiceId && <Button className="h-10" variant="outline" type="button" onClick={resetForm}>Tạo đơn mới</Button>}</div>
+            <div className="flex flex-wrap items-center gap-2"><Button className="h-10" type="button" onClick={() => void submitInvoice()} disabled={isSubmitting || isLoadingProducts}>{isSubmitting ? "Đang lưu..." : invoiceId ? "Lưu thay đổi" : "Tạo hóa đơn"}</Button>{isSaved && !invoiceId && <Button className="h-10" variant="outline" type="button" onClick={resetForm}>Tạo đơn mới</Button>}</div>
           </CardContent>
         </Card>
         <Card className="gap-0 shadow-sm xl:sticky xl:top-6">
-          <CardHeader className="flex flex-row items-center justify-between gap-3 border-b p-5 pb-4"><CardTitle className="text-lg">Preview</CardTitle>{createdInvoice && <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700" variant="outline">{invoiceId ? "Đã cập nhật" : "Đã lưu"}</Badge>}</CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-3 border-b p-5 pb-4"><CardTitle className="text-lg">Preview</CardTitle>{isSaved && <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700" variant="outline">{invoiceId ? "Đã cập nhật" : "Đã lưu"}</Badge>}</CardHeader>
           <CardContent className="p-5"><InvoicePreview ref={previewRef} invoice={displayedInvoice} /><InvoiceActions invoice={displayedInvoice} targetRef={previewRef} /><p className="mt-4 text-right text-xs text-muted-foreground">Tổng tạm tính: <strong className="text-sm text-foreground">{formatVnd(displayedInvoice.total)}</strong></p></CardContent>
         </Card>
       </div>

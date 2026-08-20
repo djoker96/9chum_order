@@ -123,11 +123,11 @@ describe("InvoiceForm product selectors", () => {
       paymentMethod: "BANK_TRANSFER",
       shippingMethod: "FREE",
       shippingFee: 0,
-      subtotal: 242000,
+      subtotal: 280000,
       discountType: "PERCENTAGE",
       discountValue: 0,
       discountAmount: 0,
-      total: 242000,
+      total: 280000,
       note: null,
       issueInvoice: false,
       companyName: null,
@@ -135,7 +135,10 @@ describe("InvoiceForm product selectors", () => {
       invoiceEmail: null,
       status: "CONFIRMED",
       createdAt: "2026-08-20T00:00:00.000Z",
-      items: [{ productId: "tao-700", productName: "Rượu táo mèo", volume: "700 ml", concentration: "25", unitPrice: 242000, quantity: 1, lineTotal: 242000 }],
+      items: [
+        { id: "item-1", productId: "tao-700", productName: "Rượu táo mèo", volume: "700 ml", concentration: "25", unitPrice: 200000, quantity: 1, lineTotal: 200000 },
+        { id: "item-2", productId: null, productName: "Sản phẩm đã xóa", volume: "500 ml", concentration: "20", unitPrice: 80000, quantity: 1, lineTotal: 80000 },
+      ],
     }
     fetchMock.mockImplementation((url: string, options?: RequestInit) => {
       if (url === "/api/invoices/invoice-1" && options?.method === "PATCH") {
@@ -149,13 +152,22 @@ describe("InvoiceForm product selectors", () => {
 
     expect(await screen.findByRole("heading", { name: "Sửa hóa đơn" })).toBeInTheDocument()
     expect(screen.getByLabelText("Tên khách hàng")).toHaveValue("Khách cũ")
+    expect(screen.getByTestId("invoice-preview")).toHaveTextContent("200.000đ")
+    expect(screen.getByTestId("invoice-preview")).toHaveTextContent("Sản phẩm đã xóa")
     fireEvent.change(screen.getByLabelText("Tên khách hàng"), { target: { value: "Khách mới" } })
     fireEvent.click(screen.getByRole("button", { name: "Lưu thay đổi" }))
 
     await waitFor(() => {
       const updateCall = fetchMock.mock.calls.find(([url, options]) => url === "/api/invoices/invoice-1" && options?.method === "PATCH")
       expect(updateCall).toBeDefined()
-      expect(JSON.parse(updateCall?.[1]?.body as string)).toMatchObject({ customerName: "Khách mới", items: [{ productId: "tao-700", quantity: 1 }] })
+      expect(JSON.parse(updateCall?.[1]?.body as string)).toMatchObject({
+        customerName: "Khách mới",
+        items: [{ productId: "tao-700", quantity: 1 }, { invoiceItemId: "item-2", quantity: 1 }],
+      })
     })
+
+    expect(await screen.findByText("Đã cập nhật")).toBeVisible()
+    fireEvent.change(screen.getByLabelText("Số điện thoại"), { target: { value: "0987654321" } })
+    expect(screen.queryByText("Đã cập nhật")).not.toBeInTheDocument()
   })
 })

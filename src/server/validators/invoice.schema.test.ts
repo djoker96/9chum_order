@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createInvoiceSchema } from "@/server/validators/invoice.schema"
+import { createInvoiceSchema, updateInvoiceSchema } from "@/server/validators/invoice.schema"
 
 const validInput = {
   customerName: "Nguyễn Văn A",
@@ -114,5 +114,15 @@ describe("createInvoiceSchema", () => {
 
     expect(result.shippingFee).toBe(0)
     expect(result.invoiceInfo?.companyName).toBe("ABC")
+  })
+
+  it("accepts a historical item reference only when updating an invoice", () => {
+    const update = updateInvoiceSchema.parse({
+      ...validInput,
+      items: [{ invoiceItemId: "invoice-item-1", quantity: 1 }],
+    })
+
+    expect(update.items).toEqual([{ invoiceItemId: "invoice-item-1", quantity: 1 }])
+    expect(createInvoiceSchema.safeParse({ ...validInput, items: update.items }).success).toBe(false)
   })
 })
