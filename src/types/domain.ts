@@ -28,7 +28,7 @@ export interface InvoiceRecord extends Omit<InvoiceOutputData, "items"> {
 }
 
 export interface InvoiceFormItem {
-  productId: string
+  productSelectionId: string
   invoiceItemId?: string
   name: string
   volume: string

@@ -171,5 +171,10 @@ describe("InvoiceForm product selectors", () => {
     expect(screen.queryByText("Đã cập nhật")).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "Lưu thay đổi" }))
     await waitFor(() => expect(fetchMock.mock.calls.filter(([url, options]) => url === "/api/invoices/invoice-1" && options?.method === "PATCH")).toHaveLength(2))
+
+    fireEvent.click(screen.getByRole("button", { name: "Thêm sản phẩm" }))
+    const newProductRow = document.querySelectorAll(".product-row")[2] as HTMLElement
+    fireEvent.click(within(newProductRow).getByRole("combobox", { name: "Tên sản phẩm" }))
+    expect(screen.queryByRole("option", { name: "Sản phẩm đã xóa" })).not.toBeInTheDocument()
   })
 })

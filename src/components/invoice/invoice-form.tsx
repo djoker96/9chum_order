@@ -19,7 +19,7 @@ import { formatVnd, type InvoiceOutputData } from "@/lib/invoice-text"
 import { findProductVariant, getProductConcentrations, getProductNames, getProductVolumes } from "@/lib/product-options"
 import { WAREHOUSE_OPTIONS, type InvoiceFormItem, type InvoiceRecord, type PaymentMethod, type ProductVariant, type ShippingMethod, type Warehouse } from "@/types/domain"
 
-const emptyItem = (): InvoiceFormItem => ({ productId: "", name: "", volume: "", concentration: "", quantity: 1 })
+const emptyItem = (): InvoiceFormItem => ({ productSelectionId: "", name: "", volume: "", concentration: "", quantity: 1 })
 const EMPTY_CONCENTRATION_OPTION_VALUE = "__EMPTY_CONCENTRATION__"
 
 interface InvoiceFormProps {
@@ -73,13 +73,13 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
           const invoice = invoicePayload.data.invoice
           for (const item of invoice.items) {
             const productSelectionId = item.productId ?? `invoice-item:${item.id}`
-            const snapshot = { id: productSelectionId, externalId: productSelectionId, name: item.productName, volume: item.volume, concentration: item.concentration, price: item.unitPrice, isActive: false }
             const productIndex = nextProducts.findIndex((product) => product.id === productSelectionId)
+            const snapshot = { id: productSelectionId, externalId: productSelectionId, name: item.productName, volume: item.volume, concentration: item.concentration, price: item.unitPrice, isActive: productIndex >= 0 && nextProducts[productIndex].isActive }
             if (productIndex === -1) nextProducts.push(snapshot)
             else nextProducts[productIndex] = { ...nextProducts[productIndex], ...snapshot }
           }
           if (isMounted) {
-            setItems(invoice.items.map((item) => ({ productId: item.productId ?? `invoice-item:${item.id}`, invoiceItemId: item.productId ? undefined : item.id, name: item.productName, volume: item.volume, concentration: item.concentration, quantity: item.quantity })))
+            setItems(invoice.items.map((item) => ({ productSelectionId: item.productId ?? `invoice-item:${item.id}`, invoiceItemId: item.productId ? undefined : item.id, name: item.productName, volume: item.volume, concentration: item.concentration, quantity: item.quantity })))
             setCustomerName(invoice.customerName)
             setPhone(invoice.phone)
             setAddress(invoice.address)
@@ -108,7 +108,7 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
 
   const previewInvoice = useMemo<InvoiceOutputData>(() => {
     const lineInputs = items.map((item) => {
-      const product = products.find((candidate) => candidate.id === item.productId)
+      const product = products.find((candidate) => candidate.id === item.productSelectionId)
       const unitPrice = product?.price ?? 0
       return {
         unitPrice,
@@ -119,7 +119,7 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
     const previewDiscountValue = discountType === "AMOUNT" ? Math.min(discountValue, subtotal) : discountValue
     const totals = calculateInvoiceTotals(lineInputs, shippingFee, shippingMethod, discountType, previewDiscountValue)
     const outputItems = items.map((item, index) => {
-      const product = products.find((candidate) => candidate.id === item.productId)
+      const product = products.find((candidate) => candidate.id === item.productSelectionId)
       return {
         productName: product?.name ?? item.name,
         volume: product?.volume ?? item.volume,
@@ -157,7 +157,7 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
     phone,
     address,
     warehouse: warehouse || undefined,
-    items: items.map(({ productId, invoiceItemId, quantity }) => invoiceItemId ? { invoiceItemId, quantity } : { productId, quantity }),
+    items: items.map(({ productSelectionId, invoiceItemId, quantity }) => invoiceItemId ? { invoiceItemId, quantity } : { productId: productSelectionId, quantity }),
     paymentMethod,
     shippingMethod,
     shippingFee,
@@ -180,7 +180,7 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
 
   async function submitInvoice(): Promise<void> {
     setError(null)
-    const invalidItem = items.some((item) => !item.productId)
+    const invalidItem = items.some((item) => !item.productSelectionId)
     if (!customerName.trim() || !phone.trim() || !address.trim() || invalidItem) {
       setError("Vui lòng nhập đủ thông tin khách hàng và chọn sản phẩm hợp lệ.")
       return
@@ -257,21 +257,22 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
             {isLoadingProducts && <p className="text-sm text-muted-foreground">Đang tải danh mục sản phẩm...</p>}
             {!isLoadingProducts && products.length === 0 && <Alert variant="destructive"><AlertDescription>Chưa có sản phẩm active. Admin cần đồng bộ dữ liệu trước.</AlertDescription></Alert>}
             {items.map((item, index) => {
-              const names = getProductNames(products)
-              const volumes = getProductVolumes(products, item.name)
-              const concentrations = getProductConcentrations(products, item.name, item.volume)
+              const selectableProducts = products.filter((product) => product.isActive || product.id === item.productSelectionId)
+              const names = getProductNames(selectableProducts)
+              const volumes = getProductVolumes(selectableProducts, item.name)
+              const concentrations = getProductConcentrations(selectableProducts, item.name, item.volume)
               const concentrationOptions = concentrations.map((concentration) => ({
                 value: concentration || EMPTY_CONCENTRATION_OPTION_VALUE,
                 label: concentration || "Không áp dụng",
               }))
-              const selectedConcentration = item.productId
+              const selectedConcentration = item.productSelectionId
                 ? item.concentration || (concentrations.includes("") ? EMPTY_CONCENTRATION_OPTION_VALUE : null)
                 : null
               return (
                 <div className="product-row grid items-end gap-3 border-t py-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_80px_32px]" key={index}>
-                  <div className="space-y-2 sm:col-span-2 lg:col-span-1"><Label htmlFor={`product-name-${index}`}>Tên sản phẩm</Label><Select value={item.name || null} onValueChange={(value) => updateItem(index, { name: value ?? "", volume: "", concentration: "", productId: "", invoiceItemId: undefined })}><SelectTrigger className="h-11 w-full text-sm" id={`product-name-${index}`}><SelectValue placeholder="Chọn sản phẩm" /></SelectTrigger><SelectContent>{names.map((name) => <SelectItem className="min-h-10 text-sm" key={name} value={name}>{name}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="space-y-2"><Label htmlFor={`product-volume-${index}`}>Thể tích</Label><Select value={item.volume || null} onValueChange={(value) => updateItem(index, { volume: value ?? "", concentration: "", productId: "", invoiceItemId: undefined })} disabled={!item.name}><SelectTrigger className="h-11 w-full text-sm" id={`product-volume-${index}`}><SelectValue placeholder="Chọn thể tích" /></SelectTrigger><SelectContent>{volumes.map((volume) => <SelectItem className="min-h-10 text-sm" key={volume} value={volume}>{volume}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="space-y-2"><Label htmlFor={`product-concentration-${index}`}>Nồng độ</Label><Select value={selectedConcentration} onValueChange={(value) => { const concentration = value === EMPTY_CONCENTRATION_OPTION_VALUE ? "" : value ?? ""; const product = findProductVariant(products, item.name, item.volume, concentration); updateItem(index, { concentration, productId: product?.id ?? "", invoiceItemId: undefined }) }} disabled={!item.volume}><SelectTrigger className="h-11 w-full text-sm" id={`product-concentration-${index}`}><SelectValue placeholder="Chọn nồng độ" /></SelectTrigger><SelectContent>{concentrationOptions.map((option) => <SelectItem className="min-h-10 text-sm" key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2 sm:col-span-2 lg:col-span-1"><Label htmlFor={`product-name-${index}`}>Tên sản phẩm</Label><Select value={item.name || null} onValueChange={(value) => updateItem(index, { name: value ?? "", volume: "", concentration: "", productSelectionId: "", invoiceItemId: undefined })}><SelectTrigger className="h-11 w-full text-sm" id={`product-name-${index}`}><SelectValue placeholder="Chọn sản phẩm" /></SelectTrigger><SelectContent>{names.map((name) => <SelectItem className="min-h-10 text-sm" key={name} value={name}>{name}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2"><Label htmlFor={`product-volume-${index}`}>Thể tích</Label><Select value={item.volume || null} onValueChange={(value) => updateItem(index, { volume: value ?? "", concentration: "", productSelectionId: "", invoiceItemId: undefined })} disabled={!item.name}><SelectTrigger className="h-11 w-full text-sm" id={`product-volume-${index}`}><SelectValue placeholder="Chọn thể tích" /></SelectTrigger><SelectContent>{volumes.map((volume) => <SelectItem className="min-h-10 text-sm" key={volume} value={volume}>{volume}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2"><Label htmlFor={`product-concentration-${index}`}>Nồng độ</Label><Select value={selectedConcentration} onValueChange={(value) => { const concentration = value === EMPTY_CONCENTRATION_OPTION_VALUE ? "" : value ?? ""; const product = findProductVariant(selectableProducts, item.name, item.volume, concentration); updateItem(index, { concentration, productSelectionId: product?.id ?? "", invoiceItemId: undefined }) }} disabled={!item.volume}><SelectTrigger className="h-11 w-full text-sm" id={`product-concentration-${index}`}><SelectValue placeholder="Chọn nồng độ" /></SelectTrigger><SelectContent>{concentrationOptions.map((option) => <SelectItem className="min-h-10 text-sm" key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div>
                   <div className="space-y-2"><Label htmlFor={`product-quantity-${index}`}>Số lượng</Label><Input className="h-9" id={`product-quantity-${index}`} type="number" min={1} value={item.quantity} onChange={(event) => updateItem(index, { quantity: Math.max(1, Number(event.target.value) || 1) })} /></div>
                   <Button className="size-9 p-0" variant="destructive" size="icon" type="button" onClick={() => removeItem(index)} disabled={items.length === 1} aria-label={`Xóa sản phẩm ${index + 1}`}><TrashIcon /></Button>
                 </div>
