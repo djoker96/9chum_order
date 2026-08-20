@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
-import { DELETE, PATCH } from "@/app/api/invoices/[id]/route"
+import { DELETE, PATCH, POST } from "@/app/api/invoices/[id]/route"
 import { requireAdmin } from "@/server/auth/session"
 import { deleteInvoice } from "@/server/invoices/invoice.repository"
 import { updateInvoice } from "@/server/invoices/invoice.service"
@@ -68,6 +68,18 @@ describe("/api/invoices/:id admin mutations", () => {
   it("permanently deletes an invoice through the admin-only endpoint", async () => {
     const response = await DELETE(
       new NextRequest("http://localhost:3000/api/invoices/invoice-1", { method: "DELETE" }),
+      { params: Promise.resolve({ id: "invoice-1" }) },
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ success: true, data: { deletedId: "invoice-1" } })
+    expect(requireAdmin).toHaveBeenCalledOnce()
+    expect(deleteInvoice).toHaveBeenCalledWith("invoice-1")
+  })
+
+  it("permanently deletes an invoice through the POST fallback used by production", async () => {
+    const response = await POST(
+      new NextRequest("http://localhost:3000/api/invoices/invoice-1", { method: "POST" }),
       { params: Promise.resolve({ id: "invoice-1" }) },
     )
 

@@ -47,7 +47,7 @@ describe("InvoiceDetail admin actions", () => {
     confirmMock.mockReturnValue(true)
     fetchMock.mockImplementation((url: string, options?: RequestInit) => {
       if (url === "/api/auth/me") return Promise.resolve(response({ success: true, data: { user: { role: "ADMIN" } } }))
-      if (options?.method === "DELETE") return Promise.resolve(response({ success: true, data: { deletedId: "invoice-1" } }))
+      if (options?.method === "POST") return Promise.resolve(response({ success: true, data: { deletedId: "invoice-1" } }))
       return Promise.resolve(response({ success: true, data: { invoice } }))
     })
   })
@@ -63,7 +63,7 @@ describe("InvoiceDetail admin actions", () => {
     expect(await screen.findByRole("link", { name: "Sửa hóa đơn" })).toHaveAttribute("href", "/admin/invoices/invoice-1/edit")
     fireEvent.click(screen.getByRole("button", { name: "Xóa hóa đơn" }))
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/invoices/invoice-1", { method: "DELETE" }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/invoices/invoice-1", { method: "POST" }))
     expect(confirmMock).toHaveBeenCalledWith("Xóa vĩnh viễn hóa đơn HD-20082026-0001? Thao tác này không thể hoàn tác.")
     expect(replaceMock).toHaveBeenCalledWith("/invoices")
   })

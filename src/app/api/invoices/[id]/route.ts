@@ -30,7 +30,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 }
 
-export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+async function removeInvoice(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     assertSameOrigin(request)
     assertApiRateLimit(request, "invoice-delete", 10)
@@ -41,4 +41,13 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   } catch (error) {
     return errorResponse(error)
   }
+}
+
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  return removeInvoice(request, context)
+}
+
+// LiteSpeed blocks DELETE on production, so the UI uses this POST fallback.
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  return removeInvoice(request, context)
 }
