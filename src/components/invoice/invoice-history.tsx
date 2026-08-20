@@ -81,6 +81,7 @@ export function InvoiceHistory() {
                   <TableHead>Mã hóa đơn</TableHead>
                   <TableHead>Khách hàng</TableHead>
                   <TableHead>Tổng tiền</TableHead>
+                  <TableHead>Nhân viên</TableHead>
                   <TableHead>Trạng thái</TableHead>
                   <TableHead>Ngày tạo</TableHead>
                   <TableHead />
@@ -92,6 +93,7 @@ export function InvoiceHistory() {
                     <TableCell><Link className="font-medium text-primary underline-offset-4 hover:underline" href={`/invoices/${invoice.id}`}>{invoice.invoiceNumber}</Link></TableCell>
                     <TableCell><div className="grid gap-1"><span>{invoice.customerName}</span><small className="text-muted-foreground">{invoice.phone}</small></div></TableCell>
                     <TableCell className="font-medium">{formatVnd(invoice.total)}</TableCell>
+                    <TableCell>{invoice.createdBy.name || invoice.createdBy.email}</TableCell>
                     <TableCell><Badge variant="outline" className={invoice.status === "CANCELLED" ? "border-destructive/30 bg-destructive/10 text-destructive" : "border-emerald-200 bg-emerald-50 text-emerald-700"}>{invoice.status === "CANCELLED" ? "Đã hủy" : "Đã xác nhận"}</Badge></TableCell>
                     <TableCell>{new Date(invoice.createdAt).toLocaleString("vi-VN")}</TableCell>
                     <TableCell><Link className="font-medium text-primary underline-offset-4 hover:underline" href={`/invoices/${invoice.id}`}>Xem</Link></TableCell>

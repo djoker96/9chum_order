@@ -52,6 +52,7 @@ export async function listInvoices(filters: InvoiceListFilters) {
         total: true,
         status: true,
         createdAt: true,
+        createdBy: { select: { name: true, email: true } },
       },
     }),
     prisma.invoice.count({ where }),
