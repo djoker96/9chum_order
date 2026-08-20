@@ -22,6 +22,7 @@ export interface InvoiceCaptureOptions {
   backgroundColor: string
   cacheBust: boolean
   height: number
+  includeQueryParams: boolean
   pixelRatio: number
   style: Partial<CSSStyleDeclaration>
   width: number
@@ -36,6 +37,7 @@ export function getInvoiceCaptureOptions(node: HTMLElement): InvoiceCaptureOptio
     backgroundColor: "#ffffff",
     cacheBust: true,
     height,
+    includeQueryParams: true,
     pixelRatio: INVOICE_EXPORT_PIXEL_RATIO,
     style: {
       height: `${height}px`,

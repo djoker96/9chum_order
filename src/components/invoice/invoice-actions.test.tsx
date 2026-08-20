@@ -90,6 +90,7 @@ describe("InvoiceActions export", () => {
     expect(mocks.toBlob).toHaveBeenCalledWith(preview, expect.objectContaining({
       backgroundColor: "#ffffff",
       cacheBust: true,
+      includeQueryParams: true,
       height: 926,
       pixelRatio: 2,
       style: { height: "926px", margin: "0", width: "500px" },
