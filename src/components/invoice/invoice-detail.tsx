@@ -62,7 +62,7 @@ export function InvoiceDetail({ id }: InvoiceDetailProps) {
     setIsDeleting(true)
     setError(null)
     try {
-      const response = await fetch(`/api/invoices/${invoice.id}`, { method: "POST" })
+      const response = await fetch(`/api/invoices/${invoice.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
       const payload = await response.json() as { success: boolean; error?: { message?: string } }
       if (!response.ok || !payload.success) throw new Error(payload.error?.message || "Không thể xóa hóa đơn.")
       router.replace("/invoices")

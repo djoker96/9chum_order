@@ -63,7 +63,7 @@ describe("InvoiceDetail admin actions", () => {
     expect(await screen.findByRole("link", { name: "Sửa hóa đơn" })).toHaveAttribute("href", "/admin/invoices/invoice-1/edit")
     fireEvent.click(screen.getByRole("button", { name: "Xóa hóa đơn" }))
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/invoices/invoice-1", { method: "POST" }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/invoices/invoice-1", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }))
     expect(confirmMock).toHaveBeenCalledWith("Xóa vĩnh viễn hóa đơn HD-20082026-0001? Thao tác này không thể hoàn tác.")
     expect(replaceMock).toHaveBeenCalledWith("/invoices")
   })
