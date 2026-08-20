@@ -28,9 +28,9 @@ export function InvoiceActions({ invoice, targetRef }: InvoiceActionsProps) {
     if (!targetRef.current) return
     setIsExporting(true)
     try {
-      const { toPng } = await import("html-to-image")
-      const dataUrl = await captureInvoicePng(targetRef.current, toPng)
-      downloadDataUrl(dataUrl, safeInvoiceFileName(invoice.customerName, "png"))
+      const { toBlob } = await import("html-to-image")
+      const blob = await captureInvoiceBlob(targetRef.current, toBlob)
+      downloadBlob(blob, safeInvoiceFileName(invoice.customerName, "png"))
       setMessage("Đã xuất PNG.")
     } catch {
       setMessage("Không thể xuất PNG.")
@@ -75,13 +75,25 @@ export function InvoiceActions({ invoice, targetRef }: InvoiceActionsProps) {
   )
 }
 
-function downloadDataUrl(dataUrl: string, fileName: string): void {
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
   link.download = fileName
-  link.href = dataUrl
+  link.href = url
   document.body.appendChild(link)
   link.click()
   link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+async function captureInvoiceBlob(
+  node: HTMLElement,
+  toBlob: (node: HTMLElement, options: ReturnType<typeof getInvoiceCaptureOptions>) => Promise<Blob | null>,
+): Promise<Blob> {
+  await waitForInvoicePreviewReady(node)
+  const blob = await toBlob(node, getInvoiceCaptureOptions(node))
+  if (!blob) throw new Error("Invoice export did not produce a PNG blob.")
+  return blob
 }
 
 async function captureInvoicePng(

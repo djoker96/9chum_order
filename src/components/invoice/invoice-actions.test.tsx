@@ -6,6 +6,7 @@ import { calculatePdfPageLayout } from "@/components/invoice/invoice-export"
 import type { InvoiceOutputData } from "@/lib/invoice-text"
 
 const mocks = vi.hoisted(() => ({
+  toBlob: vi.fn(),
   toPng: vi.fn(),
   jsPDF: vi.fn(),
   addImage: vi.fn(),
@@ -13,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
 }))
 
-vi.mock("html-to-image", () => ({ toPng: mocks.toPng }))
+vi.mock("html-to-image", () => ({ toBlob: mocks.toBlob, toPng: mocks.toPng }))
 vi.mock("jspdf", () => ({ jsPDF: mocks.jsPDF }))
 
 const invoice: InvoiceOutputData = {
@@ -52,6 +53,7 @@ function ActionHarness() {
 describe("InvoiceActions export", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.toBlob.mockResolvedValue(new Blob(["PNG"], { type: "image/png" }))
     mocks.toPng.mockResolvedValue("data:image/png;base64,invoice")
     mocks.jsPDF.mockImplementation(() => ({
       addImage: mocks.addImage,
@@ -84,8 +86,8 @@ describe("InvoiceActions export", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /PNG/ }))
 
-    await waitFor(() => expect(mocks.toPng).toHaveBeenCalledTimes(1))
-    expect(mocks.toPng).toHaveBeenCalledWith(preview, expect.objectContaining({
+    await waitFor(() => expect(mocks.toBlob).toHaveBeenCalledTimes(1))
+    expect(mocks.toBlob).toHaveBeenCalledWith(preview, expect.objectContaining({
       backgroundColor: "#ffffff",
       cacheBust: true,
       height: 926,
@@ -103,10 +105,10 @@ describe("InvoiceActions export", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /PNG/ }))
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(mocks.toPng).not.toHaveBeenCalled()
+    expect(mocks.toBlob).not.toHaveBeenCalled()
 
     fireEvent.load(image)
-    await waitFor(() => expect(mocks.toPng).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(mocks.toBlob).toHaveBeenCalledTimes(1))
   })
 
   it("fits the normal invoice preview on one A4 page without stretching it", async () => {
