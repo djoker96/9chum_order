@@ -18,13 +18,13 @@ export interface ProductVariant {
   sourceOrder?: number | null
 }
 
-export interface InvoiceRecord extends InvoiceOutputData {
+export interface InvoiceRecord extends Omit<InvoiceOutputData, "items"> {
   id: string
   invoiceNumber: string
   status: "CONFIRMED" | "CANCELLED"
   createdAt: string
   updatedAt?: string
-  items: InvoiceOutputItem[]
+  items: Array<InvoiceOutputItem & { productId: string | null }>
 }
 
 export interface InvoiceFormItem {

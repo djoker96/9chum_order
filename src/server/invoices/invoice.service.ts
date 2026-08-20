@@ -188,6 +188,59 @@ export async function createInvoice(input: CreateInvoiceInput, createdById: stri
   })
 }
 
+export async function updateInvoice(id: string, input: CreateInvoiceInput) {
+  const existingInvoice = await prisma.invoice.findUnique({
+    where: { id },
+    select: { items: { select: { productId: true } } },
+  })
+  if (!existingInvoice) throw new AppError(404, "INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn.")
+
+  const existingProductIds = new Set(existingInvoice.items.map((item) => item.productId).filter((productId): productId is string => Boolean(productId)))
+  const productIds = [...new Set(input.items.map((item) => item.productId))]
+  const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
+  const draft = resolveInvoiceDraft(input, products.map((product) => ({
+    ...productFromDatabase(product),
+    isActive: product.isActive || existingProductIds.has(product.id),
+  })))
+
+  const updated = await prisma.invoice.update({
+    where: { id },
+    data: {
+      customerName: draft.customerName,
+      phone: draft.phone,
+      address: draft.address,
+      warehouse: draft.warehouse,
+      paymentMethod: draft.paymentMethod,
+      shippingMethod: draft.shippingMethod,
+      shippingFee: draft.shippingFee,
+      subtotal: draft.subtotal,
+      discountType: draft.discountType,
+      discountValue: draft.discountValue,
+      discountAmount: draft.discountAmount,
+      total: draft.total,
+      note: draft.note,
+      issueInvoice: draft.issueInvoice,
+      companyName: draft.companyName,
+      invoiceAddress: draft.invoiceAddress,
+      invoiceEmail: draft.invoiceEmail,
+      items: {
+        deleteMany: {},
+        create: draft.items.map((item) => ({
+          productId: item.productId,
+          productName: item.productName,
+          volume: item.volume,
+          concentration: item.concentration,
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+          lineTotal: item.lineTotal,
+        })),
+      },
+    },
+    include: { items: true, createdBy: { select: { id: true, name: true } } },
+  })
+  return serializeInvoice(updated)
+}
+
 export function serializeInvoice(invoice: {
   id: string
   invoiceNumber: string

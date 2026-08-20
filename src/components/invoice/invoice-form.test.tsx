@@ -111,4 +111,51 @@ describe("InvoiceForm product selectors", () => {
     fireEvent.click(within(productRow).getByRole("combobox", { name: "Tên sản phẩm" }))
     expect(screen.getAllByRole("option")[0]).toHaveClass("min-h-10", "text-sm")
   })
+
+  it("loads an existing invoice and saves it through PATCH", async () => {
+    const invoice = {
+      id: "invoice-1",
+      invoiceNumber: "HD-20082026-0001",
+      customerName: "Khách cũ",
+      phone: "0901234567",
+      address: "Hà Nội",
+      warehouse: "L7-21",
+      paymentMethod: "BANK_TRANSFER",
+      shippingMethod: "FREE",
+      shippingFee: 0,
+      subtotal: 242000,
+      discountType: "PERCENTAGE",
+      discountValue: 0,
+      discountAmount: 0,
+      total: 242000,
+      note: null,
+      issueInvoice: false,
+      companyName: null,
+      invoiceAddress: null,
+      invoiceEmail: null,
+      status: "CONFIRMED",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      items: [{ productId: "tao-700", productName: "Rượu táo mèo", volume: "700 ml", concentration: "25", unitPrice: 242000, quantity: 1, lineTotal: 242000 }],
+    }
+    fetchMock.mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/invoices/invoice-1" && options?.method === "PATCH") {
+        return Promise.resolve(response({ success: true, data: { invoice: { ...invoice, customerName: "Khách mới" } } }))
+      }
+      if (url === "/api/invoices/invoice-1") return Promise.resolve(response({ success: true, data: { invoice } }))
+      return Promise.resolve(response({ success: true, data: { products } }))
+    })
+
+    render(<InvoiceForm invoiceId="invoice-1" />)
+
+    expect(await screen.findByRole("heading", { name: "Sửa hóa đơn" })).toBeInTheDocument()
+    expect(screen.getByLabelText("Tên khách hàng")).toHaveValue("Khách cũ")
+    fireEvent.change(screen.getByLabelText("Tên khách hàng"), { target: { value: "Khách mới" } })
+    fireEvent.click(screen.getByRole("button", { name: "Lưu thay đổi" }))
+
+    await waitFor(() => {
+      const updateCall = fetchMock.mock.calls.find(([url, options]) => url === "/api/invoices/invoice-1" && options?.method === "PATCH")
+      expect(updateCall).toBeDefined()
+      expect(JSON.parse(updateCall?.[1]?.body as string)).toMatchObject({ customerName: "Khách mới", items: [{ productId: "tao-700", quantity: 1 }] })
+    })
+  })
 })

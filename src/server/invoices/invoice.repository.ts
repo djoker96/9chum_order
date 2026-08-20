@@ -91,3 +91,8 @@ export async function cancelInvoice(id: string) {
   })
   return serializeInvoice(updated)
 }
+
+export async function deleteInvoice(id: string): Promise<void> {
+  const result = await prisma.invoice.deleteMany({ where: { id } })
+  if (result.count === 0) throw new AppError(404, "INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn.")
+}

@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { ArrowLeftIcon } from "@phosphor-icons/react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { InvoiceActions } from "@/components/invoice/invoice-actions"
 import { InvoicePreview } from "@/components/invoice/invoice-preview"
@@ -15,10 +16,12 @@ import type { InvoiceRecord } from "@/types/domain"
 interface InvoiceDetailProps { id: string }
 
 export function InvoiceDetail({ id }: InvoiceDetailProps) {
+  const router = useRouter()
   const previewRef = useRef<HTMLElement>(null)
   const [invoice, setInvoice] = useState<InvoiceRecord | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -54,6 +57,22 @@ export function InvoiceDetail({ id }: InvoiceDetailProps) {
     setInvoice(payload.data.invoice)
   }
 
+  async function deleteCurrentInvoice(): Promise<void> {
+    if (!invoice || !window.confirm(`Xóa vĩnh viễn hóa đơn ${invoice.invoiceNumber}? Thao tác này không thể hoàn tác.`)) return
+    setIsDeleting(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/invoices/${invoice.id}`, { method: "DELETE" })
+      const payload = await response.json() as { success: boolean; error?: { message?: string } }
+      if (!response.ok || !payload.success) throw new Error(payload.error?.message || "Không thể xóa hóa đơn.")
+      router.replace("/invoices")
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Không thể xóa hóa đơn.")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   if (isLoading) return <main className="flex min-h-svh items-center justify-center bg-muted/30 p-6"><p className="text-sm text-muted-foreground">Đang tải hóa đơn...</p></main>
   if (error || !invoice) return <main className="min-h-svh bg-muted/30 p-6"><div className="mx-auto flex max-w-5xl flex-col items-start gap-4"><Alert variant="destructive"><AlertDescription>{error || "Không tìm thấy hóa đơn."}</AlertDescription></Alert><Button variant="outline" nativeButton={false} render={<Link href="/invoices" />}><ArrowLeftIcon /> Quay lại lịch sử</Button></div></main>
 
@@ -73,7 +92,11 @@ export function InvoiceDetail({ id }: InvoiceDetailProps) {
             <strong className="text-xl">{formatVnd(invoice.total)}</strong>
             <p className="mt-2 text-xs text-muted-foreground">Ngày tạo</p>
             <strong className="text-sm">{new Date(invoice.createdAt).toLocaleString("vi-VN")}</strong>
-            {isAdmin && invoice.status !== "CANCELLED" && <Button className="mt-3" variant="destructive" type="button" onClick={() => void cancel()}>Hủy hóa đơn</Button>}
+            {isAdmin && <div className="mt-3 grid gap-2">
+              <Link className={buttonVariants({ variant: "outline" })} href={`/admin/invoices/${invoice.id}/edit`}>Sửa hóa đơn</Link>
+              {invoice.status !== "CANCELLED" && <Button variant="outline" type="button" onClick={() => void cancel()}>Hủy hóa đơn</Button>}
+              <Button variant="destructive" type="button" disabled={isDeleting} onClick={() => void deleteCurrentInvoice()}>{isDeleting ? "Đang xóa..." : "Xóa hóa đơn"}</Button>
+            </div>}
           </CardContent>
         </Card>
       </section>

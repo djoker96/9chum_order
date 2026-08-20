@@ -22,13 +22,17 @@ import { WAREHOUSE_OPTIONS, type InvoiceFormItem, type InvoiceRecord, type Payme
 const emptyItem = (): InvoiceFormItem => ({ productId: "", name: "", volume: "", concentration: "", quantity: 1 })
 const EMPTY_CONCENTRATION_OPTION_VALUE = "__EMPTY_CONCENTRATION__"
 
+interface InvoiceFormProps {
+  invoiceId?: string
+}
+
 function parseNonNegativeInteger(value: string): number {
   const parsedValue = Number(value)
   if (!Number.isFinite(parsedValue)) return 0
   return Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.trunc(parsedValue)))
 }
 
-export function InvoiceForm() {
+export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
   const previewRef = useRef<HTMLElement>(null)
   const [products, setProducts] = useState<ProductVariant[]>([])
   const [items, setItems] = useState<InvoiceFormItem[]>([emptyItem()])
@@ -44,6 +48,7 @@ export function InvoiceForm() {
   const [note, setNote] = useState("")
   const [issueInvoice, setIssueInvoice] = useState(false)
   const [invoiceInfo, setInvoiceInfo] = useState({ companyName: "", address: "", email: "" })
+  const [invoiceNumber, setInvoiceNumber] = useState<string>()
   const [createdInvoice, setCreatedInvoice] = useState<InvoiceRecord | null>(null)
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -51,21 +56,54 @@ export function InvoiceForm() {
 
   useEffect(() => {
     let isMounted = true
-    async function loadProducts(): Promise<void> {
+    async function loadForm(): Promise<void> {
       try {
-        const response = await fetch("/api/products")
-        const payload = await response.json() as { success: boolean; data?: { products: ProductVariant[] }; error?: { message?: string } }
-        if (!response.ok || !payload.success) throw new Error(payload.error?.message || "Không thể tải sản phẩm.")
-        if (isMounted) setProducts(payload.data?.products ?? [])
+        const [productsResponse, invoiceResponse] = await Promise.all([
+          fetch("/api/products"),
+          invoiceId ? fetch(`/api/invoices/${invoiceId}`) : Promise.resolve(null),
+        ])
+        const productsPayload = await productsResponse.json() as { success: boolean; data?: { products: ProductVariant[] }; error?: { message?: string } }
+        if (!productsResponse.ok || !productsPayload.success) throw new Error(productsPayload.error?.message || "Không thể tải sản phẩm.")
+
+        const nextProducts = [...(productsPayload.data?.products ?? [])]
+        if (invoiceResponse) {
+          const invoicePayload = await invoiceResponse.json() as { success: boolean; data?: { invoice: InvoiceRecord }; error?: { message?: string } }
+          if (!invoiceResponse.ok || !invoicePayload.success || !invoicePayload.data?.invoice) throw new Error(invoicePayload.error?.message || "Không thể tải hóa đơn.")
+          const invoice = invoicePayload.data.invoice
+          const productIds = new Set(nextProducts.map((product) => product.id))
+          for (const item of invoice.items) {
+            if (item.productId && !productIds.has(item.productId)) {
+              nextProducts.push({ id: item.productId, externalId: item.productId, name: item.productName, volume: item.volume, concentration: item.concentration, price: item.unitPrice, isActive: false })
+              productIds.add(item.productId)
+            }
+          }
+          if (isMounted) {
+            setItems(invoice.items.map((item) => ({ productId: item.productId ?? "", name: item.productName, volume: item.volume, concentration: item.concentration, quantity: item.quantity })))
+            setCustomerName(invoice.customerName)
+            setPhone(invoice.phone)
+            setAddress(invoice.address)
+            setWarehouse(invoice.warehouse && WAREHOUSE_OPTIONS.includes(invoice.warehouse as Warehouse) ? invoice.warehouse as Warehouse : "")
+            setPaymentMethod(invoice.paymentMethod as PaymentMethod)
+            setShippingMethod(invoice.shippingMethod as ShippingMethod)
+            setShippingFee(invoice.shippingFee)
+            setDiscountType(invoice.discountType)
+            setDiscountValue(invoice.discountValue)
+            setNote(invoice.note ?? "")
+            setIssueInvoice(invoice.issueInvoice)
+            setInvoiceInfo({ companyName: invoice.companyName ?? "", address: invoice.invoiceAddress ?? "", email: invoice.invoiceEmail ?? "" })
+            setInvoiceNumber(invoice.invoiceNumber)
+          }
+        }
+        if (isMounted) setProducts(nextProducts)
       } catch (loadError) {
-        if (isMounted) setError(loadError instanceof Error ? loadError.message : "Không thể tải sản phẩm.")
+        if (isMounted) setError(loadError instanceof Error ? loadError.message : "Không thể tải dữ liệu hóa đơn.")
       } finally {
         if (isMounted) setIsLoadingProducts(false)
       }
     }
-    void loadProducts()
+    void loadForm()
     return () => { isMounted = false }
-  }, [])
+  }, [invoiceId])
 
   const previewInvoice = useMemo<InvoiceOutputData>(() => {
     const lineInputs = items.map((item) => {
@@ -91,6 +129,7 @@ export function InvoiceForm() {
       }
     })
     return {
+      invoiceNumber,
       customerName,
       phone,
       address,
@@ -110,7 +149,7 @@ export function InvoiceForm() {
       invoiceEmail: issueInvoice ? invoiceInfo.email : null,
       items: outputItems,
     }
-  }, [address, customerName, discountType, discountValue, invoiceInfo, issueInvoice, items, note, paymentMethod, phone, products, shippingFee, shippingMethod, warehouse])
+  }, [address, customerName, discountType, discountValue, invoiceInfo, invoiceNumber, issueInvoice, items, note, paymentMethod, phone, products, shippingFee, shippingMethod, warehouse])
 
   function updateItem(index: number, changes: Partial<InvoiceFormItem>): void {
     setItems((currentItems) => currentItems.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item))
@@ -136,8 +175,8 @@ export function InvoiceForm() {
 
     setIsSubmitting(true)
     try {
-      const response = await fetch("/api/invoices", {
-        method: "POST",
+      const response = await fetch(invoiceId ? `/api/invoices/${invoiceId}` : "/api/invoices", {
+        method: invoiceId ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           customerName,
@@ -156,10 +195,11 @@ export function InvoiceForm() {
         }),
       })
       const payload = await response.json() as { success: boolean; data?: { invoice: InvoiceRecord }; error?: { message?: string } }
-      if (!response.ok || !payload.success || !payload.data?.invoice) throw new Error(payload.error?.message || "Không thể tạo hóa đơn.")
+      if (!response.ok || !payload.success || !payload.data?.invoice) throw new Error(payload.error?.message || (invoiceId ? "Không thể cập nhật hóa đơn." : "Không thể tạo hóa đơn."))
       setCreatedInvoice(payload.data.invoice)
+      setInvoiceNumber(payload.data.invoice.invoiceNumber)
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Không thể tạo hóa đơn.")
+      setError(submitError instanceof Error ? submitError.message : (invoiceId ? "Không thể cập nhật hóa đơn." : "Không thể tạo hóa đơn."))
     } finally {
       setIsSubmitting(false)
     }
@@ -179,17 +219,18 @@ export function InvoiceForm() {
     setNote("")
     setIssueInvoice(false)
     setInvoiceInfo({ companyName: "", address: "", email: "" })
+    setInvoiceNumber(undefined)
     setCreatedInvoice(null)
     setError(null)
   }
 
-  const displayedInvoice = createdInvoice ?? previewInvoice
+  const displayedInvoice = invoiceId ? previewInvoice : createdInvoice ?? previewInvoice
 
   return (
     <main className="min-h-svh bg-muted/30 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
       <header className="mx-auto mb-6 flex max-w-7xl flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
-        <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Hóa đơn</p><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Tạo hóa đơn</h1></div>
-        <Button variant="outline" nativeButton={false} render={<Link href="/invoices" />}>Lịch sử hóa đơn</Button>
+        <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Hóa đơn</p><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{invoiceId ? "Sửa hóa đơn" : "Tạo hóa đơn"}</h1></div>
+        <Button variant="outline" nativeButton={false} render={<Link href={invoiceId ? `/invoices/${invoiceId}` : "/invoices"} />}>{invoiceId ? "Chi tiết hóa đơn" : "Lịch sử hóa đơn"}</Button>
       </header>
       <div className="mx-auto grid max-w-7xl items-start gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,.9fr)]">
         <Card className="gap-0 shadow-sm">
@@ -272,11 +313,11 @@ export function InvoiceForm() {
             <fieldset className="space-y-3 rounded-lg border p-4"><legend className="px-1 text-sm font-medium">Xuất hóa đơn</legend><RadioGroup className="flex flex-wrap gap-x-5 gap-y-3" value={issueInvoice ? "YES" : "NO"} onValueChange={(value) => setIssueInvoice(value === "YES")}><label className="flex items-center gap-2 text-sm"><RadioGroupItem value="NO" /><span>Không</span></label><label className="flex items-center gap-2 text-sm"><RadioGroupItem value="YES" /><span>Có</span></label></RadioGroup>{issueInvoice && <div className="mt-3 grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="company-name">Tên đơn vị</Label><Input className="h-9" id="company-name" value={invoiceInfo.companyName} onChange={(event) => setInvoiceInfo((current) => ({ ...current, companyName: event.target.value }))} /></div><div className="space-y-2"><Label htmlFor="invoice-address">Địa chỉ xuất hóa đơn</Label><Input className="h-9" id="invoice-address" value={invoiceInfo.address} onChange={(event) => setInvoiceInfo((current) => ({ ...current, address: event.target.value }))} /></div><div className="space-y-2 sm:col-span-2"><Label htmlFor="invoice-email">Email xuất hóa đơn</Label><Input className="h-9" id="invoice-email" type="email" value={invoiceInfo.email} onChange={(event) => setInvoiceInfo((current) => ({ ...current, email: event.target.value }))} /></div></div>}</fieldset>
 
             {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-            <div className="flex flex-wrap items-center gap-2"><Button className="h-10" type="button" onClick={() => void submitInvoice()} disabled={isSubmitting || isLoadingProducts}>{isSubmitting ? "Đang lưu..." : "Tạo hóa đơn"}</Button>{createdInvoice && <Button className="h-10" variant="outline" type="button" onClick={resetForm}>Tạo đơn mới</Button>}</div>
+            <div className="flex flex-wrap items-center gap-2"><Button className="h-10" type="button" onClick={() => void submitInvoice()} disabled={isSubmitting || isLoadingProducts}>{isSubmitting ? "Đang lưu..." : invoiceId ? "Lưu thay đổi" : "Tạo hóa đơn"}</Button>{createdInvoice && !invoiceId && <Button className="h-10" variant="outline" type="button" onClick={resetForm}>Tạo đơn mới</Button>}</div>
           </CardContent>
         </Card>
         <Card className="gap-0 shadow-sm xl:sticky xl:top-6">
-          <CardHeader className="flex flex-row items-center justify-between gap-3 border-b p-5 pb-4"><CardTitle className="text-lg">Preview</CardTitle>{createdInvoice && <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700" variant="outline">Đã lưu</Badge>}</CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-3 border-b p-5 pb-4"><CardTitle className="text-lg">Preview</CardTitle>{createdInvoice && <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700" variant="outline">{invoiceId ? "Đã cập nhật" : "Đã lưu"}</Badge>}</CardHeader>
           <CardContent className="p-5"><InvoicePreview ref={previewRef} invoice={displayedInvoice} /><InvoiceActions invoice={displayedInvoice} targetRef={previewRef} /><p className="mt-4 text-right text-xs text-muted-foreground">Tổng tạm tính: <strong className="text-sm text-foreground">{formatVnd(displayedInvoice.total)}</strong></p></CardContent>
         </Card>
       </div>
