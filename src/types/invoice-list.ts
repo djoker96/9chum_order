@@ -12,4 +12,5 @@ export interface InvoiceListItem {
   total: number
   status: "CONFIRMED" | "CANCELLED"
   createdAt: string
+  createdBy: { name: string | null; email: string }
 }

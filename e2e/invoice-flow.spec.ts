@@ -62,6 +62,8 @@ test.describe("invoice critical flow", () => {
     await page.goto("/invoices")
     const createdInvoiceRow = page.getByRole("row").filter({ hasText: customerName })
     await expect(createdInvoiceRow).toContainText("360.000đ")
+    await expect(page.getByRole("columnheader", { name: "Nhân viên" })).toBeVisible()
+    await expect(createdInvoiceRow.getByRole("cell").nth(3)).not.toBeEmpty()
     await expect(createdInvoiceRow).toContainText("Đã xác nhận")
   })
 
