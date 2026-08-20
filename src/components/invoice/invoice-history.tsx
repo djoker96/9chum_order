@@ -60,7 +60,10 @@ export function InvoiceHistory() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Hóa đơn</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Lịch sử hóa đơn</h1>
         </div>
-        <Button nativeButton={false} render={<Link href="/invoices/create" />}><span aria-hidden="true">+</span> Tạo hóa đơn</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" nativeButton={false} render={<Link href="/statistics" />}>Thống kê</Button>
+          <Button nativeButton={false} render={<Link href="/invoices/create" />}><span aria-hidden="true">+</span> Tạo hóa đơn</Button>
+        </div>
       </header>
       <Card className="mx-auto w-full max-w-7xl gap-0 shadow-sm">
         <CardContent className="p-4 sm:p-6">

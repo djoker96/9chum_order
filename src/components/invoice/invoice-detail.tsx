@@ -81,7 +81,7 @@ export function InvoiceDetail({ id }: InvoiceDetailProps) {
     <main className="min-h-svh bg-muted/30 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
       <header className="mx-auto mb-6 flex max-w-5xl flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
         <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Chi tiết hóa đơn</p><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{invoice.invoiceNumber}</h1></div>
-        <Button variant="outline" nativeButton={false} render={<Link href="/invoices" />}><ArrowLeftIcon /> Lịch sử</Button>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" nativeButton={false} render={<Link href="/statistics" />}>Thống kê</Button><Button variant="outline" nativeButton={false} render={<Link href="/invoices" />}><ArrowLeftIcon /> Lịch sử</Button></div>
       </header>
       <section className="mx-auto grid max-w-5xl items-start gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
         <div><InvoicePreview ref={previewRef} invoice={outputInvoice} /><InvoiceActions invoice={outputInvoice} targetRef={previewRef} /></div>

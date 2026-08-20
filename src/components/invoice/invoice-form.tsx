@@ -236,7 +236,7 @@ export function InvoiceForm({ invoiceId }: InvoiceFormProps = {}) {
     <main className="min-h-svh bg-muted/30 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
       <header className="mx-auto mb-6 flex max-w-7xl flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
         <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Hóa đơn</p><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{invoiceId ? "Sửa hóa đơn" : "Tạo hóa đơn"}</h1></div>
-        <Button variant="outline" nativeButton={false} render={<Link href={invoiceId ? `/invoices/${invoiceId}` : "/invoices"} />}>{invoiceId ? "Chi tiết hóa đơn" : "Lịch sử hóa đơn"}</Button>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" nativeButton={false} render={<Link href="/statistics" />}>Thống kê</Button><Button variant="outline" nativeButton={false} render={<Link href={invoiceId ? `/invoices/${invoiceId}` : "/invoices"} />}>{invoiceId ? "Chi tiết hóa đơn" : "Lịch sử hóa đơn"}</Button></div>
       </header>
       <div className="mx-auto grid max-w-7xl items-start gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,.9fr)]">
         <Card className="gap-0 shadow-sm">
