@@ -92,6 +92,7 @@ describe("InvoiceActions export", () => {
       cacheBust: true,
       height: 926,
       pixelRatio: 2,
+      style: { height: "926px", margin: "0", width: "500px" },
       width: 500,
     }))
   })
