@@ -20,7 +20,7 @@ function toAuthenticatedUser(user: {
   return { id: user.id, email: user.email, name: user.name, role: user.role }
 }
 
-export async function createSession(userId: string): Promise<Date> {
+export async function createSession(userId: string, rememberMe: boolean): Promise<Date> {
   const environment = getServerEnv()
   const rawToken = createSessionToken()
   const expiresAt = new Date(Date.now() + environment.AUTH_SESSION_TTL_DAYS * DAY_IN_MS)
@@ -34,7 +34,7 @@ export async function createSession(userId: string): Promise<Date> {
     httpOnly: true,
     sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
-    expires: expiresAt,
+    ...(rememberMe && { expires: expiresAt }),
     path: "/",
   })
 

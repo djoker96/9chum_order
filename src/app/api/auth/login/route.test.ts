@@ -56,7 +56,15 @@ describe("POST /api/auth/login", () => {
 
     expect(response.status).toBe(200)
     expect(isLoginAttemptAllowed).toHaveBeenCalledWith("admin@example.com", "203.0.113.7")
+    expect(createSession).toHaveBeenCalledWith("admin-1", false)
     expect(clearLoginFailures).toHaveBeenCalledWith("admin@example.com")
+  })
+
+  it("creates a persistent session when requested", async () => {
+    const response = await POST(makeRequest({ email: "admin@example.com", password: "secret", rememberMe: true }))
+
+    expect(response.status).toBe(200)
+    expect(createSession).toHaveBeenCalledWith("admin-1", true)
   })
 
   it("records only invalid credentials as a login failure", async () => {

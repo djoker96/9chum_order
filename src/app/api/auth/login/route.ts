@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       throw new AppError(403, "USER_DISABLED", "Tài khoản đã bị vô hiệu hóa.")
     }
 
-    await createSession(user.id)
+    await createSession(user.id, input.rememberMe)
     clearLoginFailures(input.email)
     return successResponse({
       user: { id: user.id, name: user.name, email: user.email, role: user.role },

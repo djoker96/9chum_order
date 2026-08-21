@@ -11,6 +11,7 @@ export function LoginForm() {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -23,7 +24,7 @@ export function LoginForm() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
       })
       const payload = await response.json() as {
         success: boolean
@@ -54,6 +55,10 @@ export function LoginForm() {
         <Label htmlFor="password">Mật khẩu</Label>
         <Input id="password" name="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
       </div>
+      <Label className="w-fit cursor-pointer" htmlFor="rememberMe">
+        <input id="rememberMe" name="rememberMe" type="checkbox" className="size-4 accent-primary" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
+        Lưu đăng nhập
+      </Label>
       {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
       <Button className="h-10 w-full text-sm" type="submit" disabled={isSubmitting}>
         {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
