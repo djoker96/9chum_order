@@ -62,7 +62,7 @@ describe("StatisticsDashboard", () => {
   })
 
   it("defaults to the current month in Vietnam and renders the report", async () => {
-    render(<StatisticsDashboard />)
+    const { container } = render(<StatisticsDashboard />)
     await flushLoad()
 
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("period=month&date=2026-08-01"), expect.objectContaining({ cache: "no-store" }))
@@ -73,6 +73,9 @@ describe("StatisticsDashboard", () => {
     expect(screen.getByText("Tháng 08/2026")).toBeInTheDocument()
     expect(screen.getByText("HD-1")).toBeInTheDocument()
     expect(screen.getByRole("img", { name: "Biểu đồ doanh thu và hoa hồng" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Số lượng hóa đơn" })).not.toBeInTheDocument()
+    expect(container.querySelector("title")).toHaveTextContent("01/08 – Doanh thu: 1.000.000đ")
+    expect(Array.from(container.querySelectorAll('text[data-axis="y"]')).some((node) => node.textContent === "1.000.000đ")).toBe(true)
   })
 
   it("switches periods and uses native date or month inputs", async () => {

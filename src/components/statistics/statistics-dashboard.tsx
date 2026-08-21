@@ -174,17 +174,6 @@ export function StatisticsDashboard() {
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm">
-              <CardHeader className="border-b"><CardTitle className="text-base">Số lượng hóa đơn</CardTitle></CardHeader>
-              <CardContent className="grid gap-5 p-4 sm:p-6">
-                <BarChart ariaLabel="Biểu đồ số lượng hóa đơn" buckets={result.buckets} series={[{ key: "invoiceCount", label: "Hóa đơn", color: "#f59e0b" }]} />
-                <Table>
-                  <TableHeader><TableRow><TableHead>Mốc</TableHead><TableHead className="text-right">Số hóa đơn</TableHead></TableRow></TableHeader>
-                  <TableBody>{result.buckets.map((bucket) => <TableRow key={bucket.key}><TableCell>{bucket.label}</TableCell><TableCell className="text-right">{bucket.invoiceCount}</TableCell></TableRow>)}</TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-
             {result.viewerRole === "ADMIN" && !staffId && (
               <Card className="shadow-sm">
                 <CardHeader className="border-b"><CardTitle className="text-base">Tổng hợp theo nhân viên</CardTitle></CardHeader>
@@ -239,20 +228,27 @@ function BarChart({ ariaLabel, buckets, series }: {
   const groupWidth = (width - 56) / Math.max(buckets.length, 1)
   const barWidth = Math.max(3, Math.min(18, groupWidth / (series.length + 1)))
   const maxValue = Math.max(1, ...buckets.flatMap((bucket) => series.map(({ key }) => bucket[key])))
+  const baseline = chartHeight + 16
+  const axisTicks = Array.from({ length: 5 }, (_, index) => Math.round(maxValue * index / 4))
 
   return (
     <figure className="grid gap-3">
       <div className="flex flex-wrap gap-4" aria-hidden="true">{series.map((item) => <span key={item.key} className="flex items-center gap-2 text-xs text-muted-foreground"><span className="size-2.5 rounded-sm" style={{ background: item.color }} />{item.label}</span>)}</div>
       <div className="overflow-x-auto">
         <svg className="h-auto min-w-full" style={{ width }} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={ariaLabel}>
-          <line x1="44" y1={chartHeight + 16} x2={width - 8} y2={chartHeight + 16} stroke="currentColor" opacity="0.15" />
+          <line x1="44" y1="16" x2="44" y2={baseline} stroke="currentColor" opacity="0.15" />
+          {axisTicks.map((tick, index) => {
+            const y = baseline - (tick / maxValue) * chartHeight
+            return <g key={`${tick}-${index}`}><line x1="44" y1={y} x2={width - 8} y2={y} stroke="currentColor" opacity="0.08" /><text data-axis="y" x="39" y={y + 3} textAnchor="end" fontSize="9" fill="currentColor" opacity="0.65">{formatVnd(tick)}</text></g>
+          })}
+          <line x1="44" y1={baseline} x2={width - 8} y2={baseline} stroke="currentColor" opacity="0.15" />
           {buckets.map((bucket, bucketIndex) => {
             const x = 48 + bucketIndex * groupWidth
             return <g key={bucket.key}>{series.map((item, seriesIndex) => {
               const value = bucket[item.key]
               const barHeight = value / maxValue * chartHeight
-              return <rect key={item.key} x={x + seriesIndex * barWidth} y={chartHeight + 16 - barHeight} width={barWidth * 0.8} height={barHeight} rx="2" fill={item.color}><title>{`${bucket.label} – ${item.label}: ${value}`}</title></rect>
-            })}<text x={x + (series.length * barWidth) / 2} y={chartHeight + 34} textAnchor="middle" fontSize="9" fill="currentColor" opacity="0.65">{bucket.label}</text></g>
+              return <rect key={item.key} x={x + seriesIndex * barWidth} y={baseline - barHeight} width={barWidth * 0.8} height={barHeight} rx="2" fill={item.color}><title>{`${bucket.label} – ${item.label}: ${formatVnd(value)}`}</title></rect>
+            })}<text x={x + (series.length * barWidth) / 2} y={baseline + 34} textAnchor="middle" fontSize="9" fill="currentColor" opacity="0.65">{bucket.label}</text></g>
           })}
         </svg>
       </div>
